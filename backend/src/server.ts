@@ -395,4 +395,8 @@ app.post('/api/expenses/deduct', authenticateToken, async (req: any, res) => {
   } catch (error: any) { res.status(400).json({ error: error.message }); }
 });
 
-app.listen(port, () => console.log(`🚀 API PocketMoney sur http://localhost:${port}`));
+if (!process.env.VERCEL) {
+  app.listen(port, () => console.log(`🚀 API PocketMoney sur http://localhost:${port}`));
+}
+
+export default app;
