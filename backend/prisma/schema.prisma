@@ -1,0 +1,127 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Family {
+  id         String   @id @default(uuid())
+  name       String
+  inviteCode String   @unique
+  createdAt  DateTime @default(now())
+  users      User[]
+  rules      Rule[]
+  goals      Goal[]
+}
+
+model User {
+  id         String   @id @default(uuid())
+  name       String
+  email      String?  @unique
+  password   String
+  role       String   // PARENT, CHILD
+  family     Family   @relation(fields: [familyId], references: [id])
+  familyId   String
+  
+  // Specific for children
+  age        Int?
+  avatar     String?
+  color      String?
+  balance    Float    @default(0)
+  monthDelta Float    @default(0)
+
+  // Relations
+  chores       Chore[]            @relation("AssignedChores")
+  transactions Transaction[]
+  goalLinks    GoalParticipant[]
+  expenses     ExpenseRequest[]
+  settings     ChildSettings?
+}
+
+model Chore {
+  id              String      @id @default(uuid())
+  title           String
+  description     String?
+  reward          Float
+  assignee        User        @relation("AssignedChores", fields: [assigneeId], references: [id])
+  assigneeId      String
+  deadline        String
+  status          String      @default("PENDING") // PENDING, SUBMITTED, COMPLETED, REJECTED
+  proofImageUrl   String?
+  note            String?
+  rejectionReason String?
+  createdAt       DateTime    @default(now())
+}
+
+model ExpenseRequest {
+  id             String        @id @default(uuid())
+  child          User          @relation(fields: [childId], references: [id])
+  childId        String
+  title          String
+  description    String?
+  amount         Float
+  expenseType    String        // ONLINE, CASH, OTHER
+  reference      String?
+  status         String        @default("PENDING") // PENDING, APPROVED, REJECTED
+  approvedAmount Float?
+  parentNote     String?
+  createdAt      DateTime      @default(now())
+}
+
+model Transaction {
+  id          String          @id @default(uuid())
+  child       User            @relation(fields: [childId], references: [id])
+  childId     String
+  amount      Float
+  type        String          // CHORE, ALLOWANCE, PENALTY, GOAL_FUNDING, EXPENSE_APPROVED, EXPENSE_DEDUCTION, REFUND
+  description String
+  date        DateTime        @default(now())
+  expenseId   String?
+  goalId      String?
+}
+
+model Goal {
+  id           String            @id @default(uuid())
+  family       Family            @relation(fields: [familyId], references: [id])
+  familyId     String
+  title        String
+  target       Float
+  current      Float             @default(0)
+  icon         String
+  isShared     Boolean           @default(false)
+  status       String            @default("IN_PROGRESS") // IN_PROGRESS, COMPLETED
+  participants GoalParticipant[]
+}
+
+model GoalParticipant {
+  id                String @id @default(uuid())
+  goal              Goal   @relation(fields: [goalId], references: [id])
+  goalId            String
+  child             User   @relation(fields: [childId], references: [id])
+  childId           String
+  contributedAmount Float  @default(0)
+
+  @@unique([goalId, childId])
+}
+
+model Rule {
+  id          String  @id @default(uuid())
+  family      Family  @relation(fields: [familyId], references: [id])
+  familyId    String
+  title       String
+  description String?
+  amount      Float
+  active      Boolean @default(true)
+}
+
+model ChildSettings {
+  id                   String  @id @default(uuid())
+  child                User    @relation(fields: [childId], references: [id])
+  childId              String  @unique
+  maxExpensePerRequest Float?
+  maxExpensePerWeek    Float?
+  frozen               Boolean @default(false)
+}
