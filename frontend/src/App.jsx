@@ -4,7 +4,7 @@ import { AppProvider, useApp } from './context';
 
 // Import basic components
 import { Welcome, SignIn, SignUp, Splash } from './screens/auth.jsx';
-import { ParentDashboard, ChoresList, ChoreDetail, CreateChore, ChildrenView, RulesScreen, AnalyticsScreen, SettingsScreen, ExpensesReview } from './screens/parent.jsx';
+import { ParentDashboard, ChoresList, ChoreDetail, CreateChore, ChildrenView, RulesScreen, PenaltyHistoryScreen, AnalyticsScreen, SettingsScreen, ExpensesReview, ChildSettingsScreen } from './screens/parent.jsx';
 import { ChildDashboard, AvailableChores, SubmitChore, MyChores, BalanceScreen, GoalsScreen, ProfileScreen, ExpensesScreen } from './screens/child.jsx';
 
 function AppRoutes() {
@@ -38,7 +38,9 @@ function AppRoutes() {
       <Route path="/parent/chores/new" element={<CreateChore />} />
       <Route path="/parent/chores/:choreId/edit" element={<CreateChore />} />
       <Route path="/parent/children" element={<ChildrenView />} />
+      <Route path="/parent/children/:childId/settings" element={<ChildSettingsScreen />} />
       <Route path="/parent/rules" element={<RulesScreen />} />
+      <Route path="/parent/rules/history" element={<PenaltyHistoryScreen />} />
       <Route path="/parent/analytics" element={<AnalyticsScreen />} />
       <Route path="/parent/settings" element={<SettingsScreen />} />
       <Route path="/parent/expenses" element={<ExpensesReview />} />

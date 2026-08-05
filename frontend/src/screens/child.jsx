@@ -7,7 +7,7 @@ import {
   ArrowDownRight, LogOut, Award, Star, Gift, Zap,
   ListChecks, Wallet, CheckCircle, XCircle, AlertCircle,
   Gamepad2, Bike, Music, Smartphone, Flame, Trophy,
-  MoreHorizontal, Edit3, ShoppingBag
+  MoreHorizontal, Edit3, ShoppingBag, Lock
 } from 'lucide-react';
 import { useApp } from '../context';
 import { Layout } from '../components/layout';
@@ -318,6 +318,24 @@ export function BalanceScreen() {
           <p className="text-white/60 text-xs font-black uppercase tracking-[0.3em] mb-4">Total accumulé</p>
           <p className="text-7xl font-mono-num font-black tracking-tighter">€{user.balance?.toFixed(2)}</p>
         </div>
+
+        {user.settings?.splitEnabled && (
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-white dark:bg-surface-container-high rounded-[2rem] p-6 text-center shadow-clay">
+              <p className="text-[10px] font-black text-on-surface-variant uppercase tracking-widest mb-2">Dépense</p>
+              <p className="text-2xl font-mono-num font-black text-on-surface">€{(user.spendBalance ?? 0).toFixed(2)}</p>
+            </div>
+            <div className="bg-white dark:bg-surface-container-high rounded-[2rem] p-6 text-center shadow-clay">
+              <p className="text-[10px] font-black text-secondary uppercase tracking-widest mb-2">Épargne</p>
+              <p className="text-2xl font-mono-num font-black text-on-surface">€{(user.saveBalance ?? 0).toFixed(2)}</p>
+            </div>
+            <div className="bg-white dark:bg-surface-container-high rounded-[2rem] p-6 text-center shadow-clay">
+              <p className="text-[10px] font-black text-tertiary uppercase tracking-widest mb-2">Don</p>
+              <p className="text-2xl font-mono-num font-black text-on-surface">€{(user.giveBalance ?? 0).toFixed(2)}</p>
+            </div>
+          </div>
+        )}
+
         <div className="space-y-6">
           <h3 className="font-headline font-black text-2xl text-on-surface tracking-tighter px-2 opacity-70 text-center">Historique des pièces</h3>
           <div className="space-y-3">
@@ -418,10 +436,11 @@ export function ExpensesScreen() {
   if (loading || !user) return <Layout title="Mes Dépenses"><div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div></div></Layout>;
 
   const myExpenses = expenses || [];
+  const frozen = !!user.settings?.frozen;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.title || !form.amount) return;
+    if (frozen || !form.title || !form.amount) return;
     setBusy(true);
     try {
       await requestExpense({ ...form, amount: parseFloat(form.amount) || 0 });
@@ -437,7 +456,7 @@ export function ExpensesScreen() {
       title="Mes Dépenses"
       showBack
       onBack={() => navigate('/child')}
-      headerRight={<Btn size="sm" icon={Plus} onClick={() => setModalOpen(true)}>Demander</Btn>}
+      headerRight={<Btn size="sm" icon={Plus} disabled={frozen} onClick={() => setModalOpen(true)}>Demander</Btn>}
     >
       <Modal
         open={modalOpen}
@@ -464,8 +483,14 @@ export function ExpensesScreen() {
       </Modal>
 
       <div className="max-w-2xl mx-auto space-y-4 pb-20">
+        {frozen && (
+          <Card className="p-6 bg-error-container/20 border-2 border-error/20 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-error/10 flex items-center justify-center text-error flex-shrink-0"><Lock size={22} /></div>
+            <p className="text-sm font-bold text-on-surface">Ton compte est gelé par un parent — impossible de faire une nouvelle demande pour le moment.</p>
+          </Card>
+        )}
         {myExpenses.length === 0 && (
-          <EmptyState icon={ShoppingBag} title="Aucune demande" description="Envie de quelque chose ? Demande à tes parents." action={<Btn onClick={() => setModalOpen(true)}>Faire une demande</Btn>} />
+          <EmptyState icon={ShoppingBag} title="Aucune demande" description="Envie de quelque chose ? Demande à tes parents." action={!frozen && <Btn onClick={() => setModalOpen(true)}>Faire une demande</Btn>} />
         )}
         {myExpenses.map(expense => (
           <Card key={expense.id} className="p-6">

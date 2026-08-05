@@ -1,7 +1,16 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { Server as HttpServer } from 'http';
 import jwt from 'jsonwebtoken';
-import { JwtPayload } from './middleware/auth';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+interface SocketUser {
+  id: string;
+  role: string;
+  familyId: string;
+  name: string;
+}
 
 let io: SocketIOServer;
 
@@ -14,19 +23,23 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
     },
   });
 
-  io.use((socket: Socket, next) => {
+  io.use(async (socket: Socket, next) => {
     const token = socket.handshake.auth?.token as string | undefined;
-
-    if (!token) {
-      return next(new Error('Authentication error: no token'));
-    }
+    if (!token) return next(new Error('Authentication error: no token'));
 
     try {
       const secret = process.env.JWT_SECRET;
       if (!secret) throw new Error('JWT_SECRET not configured');
 
-      const decoded = jwt.verify(token, secret) as JwtPayload;
-      (socket as Socket & { user: JwtPayload }).user = decoded;
+      // generateToken() in server.ts only signs { userId } — look the user
+      // up in the DB rather than trusting a richer shape in the token itself.
+      const decoded = jwt.verify(token, secret) as { userId: string };
+      const user = await prisma.user.findUnique({ where: { id: decoded.userId } });
+      if (!user) return next(new Error('Authentication error: user not found'));
+
+      (socket as Socket & { user: SocketUser }).user = {
+        id: user.id, role: user.role, familyId: user.familyId, name: user.name,
+      };
       next();
     } catch {
       next(new Error('Authentication error: invalid token'));
@@ -34,7 +47,7 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
   });
 
   io.on('connection', (socket: Socket) => {
-    const user = (socket as Socket & { user: JwtPayload }).user;
+    const user = (socket as Socket & { user: SocketUser }).user;
 
     if (user) {
       // Join family room for broadcast events

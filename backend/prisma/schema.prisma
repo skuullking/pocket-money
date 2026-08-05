@@ -15,6 +15,7 @@ model Family {
   users      User[]
   rules      Rule[]
   goals      Goal[]
+  choreTemplates ChoreTemplate[]
 }
 
 model User {
@@ -33,12 +34,20 @@ model User {
   balance    Float    @default(0)
   monthDelta Float    @default(0)
 
+  // Répartition Épargne / Dépense / Don (pédagogique, additive — `balance`
+  // reste l'unique cagnotte dépensable, voir applySplit dans server.ts)
+  saveBalance  Float @default(0)
+  spendBalance Float @default(0)
+  giveBalance  Float @default(0)
+
   // Relations
-  chores       Chore[]            @relation("AssignedChores")
-  transactions Transaction[]
-  goalLinks    GoalParticipant[]
-  expenses     ExpenseRequest[]
-  settings     ChildSettings?
+  chores                 Chore[]            @relation("AssignedChores")
+  choreTemplateAssignments ChoreTemplate[]  @relation("ChoreTemplateAssignments")
+  transactions           Transaction[]
+  goalLinks              GoalParticipant[]
+  expenses               ExpenseRequest[]
+  settings               ChildSettings?
+  allowanceSchedule      AllowanceSchedule?
 }
 
 model Chore {
@@ -53,7 +62,24 @@ model Chore {
   proofImageUrl   String?
   note            String?
   rejectionReason String?
+  templateId      String?
   createdAt       DateTime    @default(now())
+}
+
+model ChoreTemplate {
+  id                String   @id @default(uuid())
+  family            Family   @relation(fields: [familyId], references: [id])
+  familyId          String
+  title             String
+  description       String?
+  reward            Float
+  assignee          User     @relation("ChoreTemplateAssignments", fields: [assigneeId], references: [id])
+  assigneeId        String
+  frequency         String   // DAILY, WEEKLY
+  weekday           Int?     // 0-6, utilisé seulement si WEEKLY
+  active            Boolean  @default(true)
+  lastGeneratedDate String?
+  createdAt         DateTime @default(now())
 }
 
 model ExpenseRequest {
@@ -124,4 +150,20 @@ model ChildSettings {
   maxExpensePerRequest Float?
   maxExpensePerWeek    Float?
   frozen               Boolean @default(false)
+
+  splitEnabled  Boolean @default(false)
+  splitSavePct  Float   @default(0)
+  splitSpendPct Float   @default(100)
+  splitGivePct  Float   @default(0)
+}
+
+model AllowanceSchedule {
+  id         String    @id @default(uuid())
+  child      User      @relation(fields: [childId], references: [id])
+  childId    String    @unique
+  amount     Float
+  frequency  String    // WEEKLY, MONTHLY
+  active     Boolean   @default(true)
+  lastPaidAt DateTime?
+  createdAt  DateTime  @default(now())
 }

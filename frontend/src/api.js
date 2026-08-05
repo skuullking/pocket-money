@@ -1,4 +1,5 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+export const SOCKET_URL = API_BASE_URL.replace(/\/api\/?$/, '');
 
 const fetchAPI = async (endpoint, options = {}) => {
   const token = localStorage.getItem('token');
@@ -45,10 +46,6 @@ export const authAPI = {
 export const familyAPI = {
   getFamily: () => fetchAPI('/family'),
   getChildren: () => fetchAPI('/family/children'),
-  updateRules: (rules) => fetchAPI('/family/rules', {
-    method: 'PUT',
-    body: JSON.stringify({ rules }),
-  }),
 };
 
 export const choresAPI = {
@@ -120,9 +117,61 @@ export const transactionsAPI = {
   getTransactions: () => fetchAPI('/transactions'),
 };
 
+export const analyticsAPI = {
+  getOverview: () => fetchAPI('/analytics/overview'),
+};
+
 export const rulesAPI = {
   applyPenalty: (ruleId, data) => fetchAPI(`/rules/${ruleId}/apply`, {
     method: 'POST',
     body: JSON.stringify(data),
+  }),
+  getRules: () => fetchAPI('/rules'),
+  createRule: (data) => fetchAPI('/rules', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  updateRule: (id, data) => fetchAPI(`/rules/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  deleteRule: (id) => fetchAPI(`/rules/${id}`, {
+    method: 'DELETE',
+  }),
+  getPenaltyHistory: () => fetchAPI('/family/penalty-history'),
+};
+
+export const childSettingsAPI = {
+  get: (childId) => fetchAPI(`/children/${childId}/settings`),
+  update: (childId, data) => fetchAPI(`/children/${childId}/settings`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  updateSplit: (childId, data) => fetchAPI(`/children/${childId}/split-settings`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+};
+
+export const allowanceAPI = {
+  get: (childId) => fetchAPI(`/children/${childId}/allowance`),
+  update: (childId, data) => fetchAPI(`/children/${childId}/allowance`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+};
+
+export const choreTemplatesAPI = {
+  getTemplates: () => fetchAPI('/chore-templates'),
+  create: (data) => fetchAPI('/chore-templates', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  update: (id, data) => fetchAPI(`/chore-templates/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  }),
+  delete: (id) => fetchAPI(`/chore-templates/${id}`, {
+    method: 'DELETE',
   }),
 };
