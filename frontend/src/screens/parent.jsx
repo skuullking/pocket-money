@@ -18,7 +18,7 @@ import {
 // ── Parent Dashboard ──────────────────────────────────────────────────────
 export function ParentDashboard() {
   const navigate = useNavigate();
-  const { family, chores, logout, loading } = useApp();
+  const { family, chores, expenses, logout, loading } = useApp();
 
   if (loading || !family) {
     return (
@@ -32,6 +32,7 @@ export function ParentDashboard() {
 
   const children = (family?.users || []).filter(u => u.role === 'CHILD');
   const pendingCount = (chores || []).filter(c => c.status === 'SUBMITTED' || c.status === 'submitted').length;
+  const pendingExpenseCount = (expenses || []).filter(e => e.status === 'PENDING').length;
 
   return (
     <Layout 
@@ -54,10 +55,12 @@ export function ParentDashboard() {
           onClick={() => navigate('/parent/chores')}
         />
         <StatCard
-          title="Performance"
-          value="92%"
-          sub="Taux de réussite"
-          icon={TrendingUp}
+          title="Dépenses"
+          value={pendingExpenseCount}
+          sub="Demandes en attente"
+          icon={ShoppingBag}
+          color="secondary"
+          onClick={() => navigate('/parent/expenses')}
         />
       </div>
 
@@ -235,7 +238,7 @@ export function ChoresList() {
 // ── Chore Detail Screen ──────────────────────────────────────────────────
 export function ChoreDetail() {
   const navigate = useNavigate();
-  const { chores, family, approveChore, rejectChore } = useApp();
+  const { chores, family, approveChore, rejectChore, deleteChore } = useApp();
   const { choreId } = useParams();
   const chore = (chores || []).find(c => c.id === choreId);
 
@@ -252,6 +255,12 @@ export function ChoreDetail() {
   const handleReject = async () => {
     const reason = window.prompt("Raison du refus (optionnel) :");
     await rejectChore(chore.id, reason || '');
+    navigate('/parent/chores');
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm(`Supprimer définitivement "${chore.title}" ?`)) return;
+    await deleteChore(chore.id);
     navigate('/parent/chores');
   };
 
@@ -336,8 +345,8 @@ export function ChoreDetail() {
                </div>
                {!isSubmitted && (
                  <div className="pt-6 border-t border-on-surface/5 space-y-3">
-                   <Btn full variant="outline">Modifier la tâche</Btn>
-                   <button className="w-full py-3 text-xs font-bold text-error/60 hover:text-error transition-colors uppercase tracking-widest">Supprimer la corvée</button>
+                   <Btn full variant="outline" onClick={() => navigate(`/parent/chores/${chore.id}/edit`)}>Modifier la tâche</Btn>
+                   <button onClick={handleDelete} className="w-full py-3 text-xs font-bold text-error/60 hover:text-error transition-colors uppercase tracking-widest">Supprimer la corvée</button>
                  </div>
                )}
             </Card>
@@ -348,36 +357,76 @@ export function ChoreDetail() {
   );
 }
 
-// ── Create Chore Screen ──────────────────────────────────────────────────
+// ── Create / Edit Chore Screen ───────────────────────────────────────────
 export function CreateChore() {
   const navigate = useNavigate();
-  const { family, addChore, loading } = useApp();
+  const { choreId } = useParams();
+  const isEdit = !!choreId;
+  const { family, chores, addChore, editChore, loading } = useApp();
   const children = (family?.users || []).filter(u => u.role === 'CHILD');
+  const existing = isEdit ? (chores || []).find(c => c.id === choreId) : null;
   const [form, setForm] = useState({ title: '', description: '', reward: '', assigneeId: '', deadline: 'Aujourd\'hui' });
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    if (children.length > 0 && !form.assigneeId) {
+    if (isEdit && existing && !initialized) {
+      setForm({
+        title: existing.title || '',
+        description: existing.description || '',
+        reward: String(existing.reward ?? ''),
+        assigneeId: existing.assigneeId || '',
+        deadline: existing.deadline || 'Aujourd\'hui',
+      });
+      setInitialized(true);
+    }
+  }, [isEdit, existing, initialized]);
+
+  useEffect(() => {
+    if (!isEdit && children.length > 0 && !form.assigneeId) {
       setForm(f => ({ ...f, assigneeId: children[0].id }));
     }
-  }, [children]);
+  }, [children, isEdit]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.assigneeId) return;
-    await addChore({ ...form, reward: parseFloat(form.reward) || 0 });
+    if (isEdit) {
+      await editChore(choreId, { ...form, reward: parseFloat(form.reward) || 0 });
+    } else {
+      await addChore({ ...form, reward: parseFloat(form.reward) || 0 });
+    }
     navigate('/parent/chores');
   };
 
-  if (loading || !family) return <Layout title="Nouvelle Corvée"><div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div></div></Layout>;
+  if (loading || !family) return <Layout title={isEdit ? 'Modifier la corvée' : 'Nouvelle Corvée'}><div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div></div></Layout>;
+
+  if (isEdit && !existing) {
+    return <Layout title="Erreur" showBack onBack={() => navigate('/parent/chores')}><div className="text-center py-20"><p className="font-bold text-on-surface-variant">Corvée introuvable</p></div></Layout>;
+  }
+
+  if (!isEdit && children.length === 0) {
+    return (
+      <Layout title="Nouvelle Corvée" showBack onBack={() => navigate('/parent/chores')}>
+        <div className="max-w-md mx-auto">
+          <EmptyState
+            icon={UserPlus}
+            title="Ajoutez d'abord un enfant"
+            description="Il faut au moins un enfant dans la famille pour lui assigner une corvée. Partagez le code d'invitation depuis les Paramètres."
+            action={<Btn onClick={() => navigate('/parent/settings')}>Voir le code d'invitation</Btn>}
+          />
+        </div>
+      </Layout>
+    );
+  }
 
   return (
-    <Layout title="Nouvelle Corvée" showBack onBack={() => navigate('/parent/chores')}>
+    <Layout title={isEdit ? 'Modifier la corvée' : 'Nouvelle Corvée'} showBack onBack={() => navigate(isEdit ? `/parent/chores/${choreId}` : '/parent/chores')}>
       <div className="max-w-2xl mx-auto pt-4">
         <Card className="p-10 shadow-clay-primary border-t-8 border-primary">
           <form onSubmit={handleSubmit} className="space-y-8">
             <Input label="Titre de la corvée" placeholder="ex: Ranger la cuisine" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required className="h-14 text-lg font-bold" />
             <Textarea label="Description détaillée" placeholder="Dites à votre enfant précisément ce qu'il doit faire..." value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="text-base" />
-            
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
               <Input label="Récompense (€)" type="number" min="0" step="0.1" value={form.reward} onChange={e => setForm(f => ({ ...f, reward: e.target.value }))} required className="h-14 font-mono-num font-black" prefix="€" />
               <Select label="Pour qui ?" value={form.assigneeId} onChange={e => setForm(f => ({ ...f, assigneeId: e.target.value }))} options={children.map(c => ({ label: c.name, value: c.id }))} />
@@ -394,9 +443,9 @@ export function CreateChore() {
                 { label: 'Plus tard', value: 'Plus tard' },
               ]}
             />
-            
+
             <div className="pt-6">
-              <Btn type="submit" full icon={Save} className="h-16 text-lg shadow-clay-primary">Lancer la mission !</Btn>
+              <Btn type="submit" full icon={Save} className="h-16 text-lg shadow-clay-primary">{isEdit ? 'Enregistrer les modifications' : 'Lancer la mission !'}</Btn>
             </div>
           </form>
         </Card>
@@ -408,7 +457,7 @@ export function CreateChore() {
 // ── Children Management Screen ───────────────────────────────────────────
 export function ChildrenView() {
   const navigate = useNavigate();
-  const { family, loading, applyPenalty } = useApp();
+  const { family, loading, applyPenalty, showToast } = useApp();
   const children = (family?.users || []).filter(u => u.role === 'CHILD');
   const rules = (family?.rules || []).filter(r => r.active !== false);
 
@@ -550,7 +599,10 @@ export function ChildrenView() {
           </Card>
         ))}
 
-        <button onClick={() => {}} className="border-4 border-dashed border-on-surface/5 rounded-[2.5rem] p-12 flex flex-col items-center justify-center gap-4 hover:bg-primary/5 hover:border-primary/20 transition-all group">
+        <button
+          onClick={() => { showToast('Partagez votre code d\'invitation avec votre enfant pour qu\'il crée son compte.', 'info'); navigate('/parent/settings'); }}
+          className="border-4 border-dashed border-on-surface/5 rounded-[2.5rem] p-12 flex flex-col items-center justify-center gap-4 hover:bg-primary/5 hover:border-primary/20 transition-all group"
+        >
           <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
             <UserPlus size={32} />
           </div>
@@ -748,6 +800,104 @@ export function SettingsScreen() {
             Se déconnecter
           </Btn>
         </Card>
+      </div>
+    </Layout>
+  );
+}
+
+// ── Expense Requests Review Screen ───────────────────────────────────────
+export function ExpensesReview() {
+  const navigate = useNavigate();
+  const { family, expenses, loading, approveExpense, rejectExpense } = useApp();
+  const [approveModal, setApproveModal] = useState(null); // expense
+  const [amount, setAmount] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  if (loading || !family) return <Layout title="Dépenses" showBack onBack={() => navigate('/parent')}><div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div></div></Layout>;
+
+  const children = (family?.users || []).filter(u => u.role === 'CHILD');
+  const pending = (expenses || []).filter(e => e.status === 'PENDING');
+  const resolved = (expenses || []).filter(e => e.status !== 'PENDING');
+
+  const openApprove = (expense) => { setAmount(String(expense.amount)); setApproveModal(expense); };
+
+  const handleApprove = async () => {
+    if (!approveModal) return;
+    setBusy(true);
+    await approveExpense(approveModal.id, { approvedAmount: amount });
+    setBusy(false);
+    setApproveModal(null);
+  };
+
+  const handleReject = async (expense) => {
+    const reason = window.prompt('Raison du refus (optionnel) :');
+    await rejectExpense(expense.id, { parentNote: reason || '' });
+  };
+
+  return (
+    <Layout title="Dépenses" showBack onBack={() => navigate('/parent')}>
+      <Modal
+        open={!!approveModal}
+        onClose={() => setApproveModal(null)}
+        title={`Approuver "${approveModal?.title}"`}
+        footer={
+          <Btn full variant="secondary" loading={busy} onClick={handleApprove}>Approuver {amount ? `(€${amount})` : ''}</Btn>
+        }
+      >
+        {approveModal && (
+          <div className="space-y-4">
+            <p className="text-sm text-on-surface-variant">Demande de <b>{approveModal.child?.name}</b> : {approveModal.description || 'Aucune description'}</p>
+            <Input label="Montant approuvé (€)" type="number" min="0" step="0.1" value={amount} onChange={e => setAmount(e.target.value)} prefix="€" />
+          </div>
+        )}
+      </Modal>
+
+      <div className="max-w-3xl mx-auto space-y-12 pb-20">
+        <section>
+          <h3 className="font-headline font-black text-2xl text-on-surface tracking-tighter mb-6">À traiter ({pending.length})</h3>
+          {pending.length === 0 ? (
+            <EmptyState icon={ShoppingBag} title="Rien à traiter" description="Aucune demande de dépense en attente." />
+          ) : (
+            <div className="space-y-4">
+              {pending.map(expense => (
+                <Card key={expense.id} className="p-6">
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div className="flex items-center gap-4 min-w-0">
+                      <Avatar letter={expense.child?.avatar || expense.child?.name?.charAt(0)} size="sm" />
+                      <div className="min-w-0">
+                        <p className="font-headline font-extrabold text-on-surface truncate">{expense.title}</p>
+                        <p className="text-xs text-on-surface-variant font-bold uppercase">{expense.child?.name} · €{expense.amount}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <Btn size="sm" variant="secondary" icon={Check} onClick={() => openApprove(expense)}>Approuver</Btn>
+                      <Btn size="sm" variant="danger" icon={X} onClick={() => handleReject(expense)}>Refuser</Btn>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {resolved.length > 0 && (
+          <section>
+            <h3 className="font-headline font-black text-2xl text-on-surface tracking-tighter mb-6 opacity-60">Historique</h3>
+            <div className="space-y-3">
+              {resolved.map(expense => (
+                <Card key={expense.id} className="p-5 opacity-80">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="font-bold text-on-surface truncate">{expense.title}</p>
+                      <p className="text-xs text-on-surface-variant">{expense.child?.name}</p>
+                    </div>
+                    <StatusBadge status={expense.status} />
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     </Layout>
   );

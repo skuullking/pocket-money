@@ -68,6 +68,13 @@ export const choresAPI = {
     method: 'PATCH',
     body: JSON.stringify(data),
   }),
+  updateChore: (id, data) => fetchAPI(`/chores/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  }),
+  deleteChore: (id) => fetchAPI(`/chores/${id}`, {
+    method: 'DELETE',
+  }),
 };
 
 export const expensesAPI = {

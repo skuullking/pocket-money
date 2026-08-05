@@ -100,6 +100,7 @@ export function StatusBadge({ status }) {
     pending:   { label: 'En attente', variant: 'default' },
     submitted: { label: 'À valider',    variant: 'warning' },
     completed: { label: 'Terminé',    variant: 'success' },
+    approved:  { label: 'Approuvée',  variant: 'success' },
     rejected:  { label: 'Refusé',    variant: 'danger' },
   };
   const s = status?.toLowerCase();
@@ -234,7 +235,7 @@ export function Modal({ open, onClose, title, children, footer }) {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 sm:p-12">
       <div className="absolute inset-0 bg-black/50 dark:bg-black/80 backdrop-blur-xl animate-fade-in" onClick={onClose} />
-      <div className="relative bg-background dark:bg-surface-container-low w-full max-w-xl rounded-[3rem] shadow-2xl overflow-hidden flex flex-col animate-pop-in border-4 border-white/20">
+      <div className="relative bg-background dark:bg-surface-container-low w-full max-w-xl max-h-[85vh] rounded-[3rem] shadow-2xl overflow-hidden flex flex-col animate-pop-in border-4 border-white/20">
         <div className="px-10 py-8 border-b border-on-surface/10 flex items-center justify-between">
           <h2 className="text-2xl font-headline font-black text-on-surface tracking-tight">{title}</h2>
           <button onClick={onClose} className="w-12 h-12 rounded-full bg-surface-container-highest flex items-center justify-center text-on-surface hover:bg-error hover:text-white transition-all active:scale-90 shadow-clay"><X size={24} /></button>

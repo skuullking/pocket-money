@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   Users, User, ChevronRight, Eye, EyeOff, ArrowLeft,
   Shield, Plus, Wallet, Sparkles, Zap, Trash2
@@ -38,8 +38,11 @@ export function Splash({ onFinish }) {
 
 // ── Welcome Screen ─────────────────────────────────────────────────────────
 export function Welcome() {
-  const { family, loginAsChild } = useApp();
+  const { family, cachedFamilyMembers } = useApp();
   const navigate = useNavigate();
+  // `family` is only populated after login (fetchAppData needs a user), so on this
+  // logged-out screen we fall back to the last family seen on this device.
+  const quickAccessChildren = (family?.users?.filter(u => u.role === 'CHILD')) || cachedFamilyMembers || [];
 
   return (
     <Layout noPadding>
@@ -59,19 +62,21 @@ export function Welcome() {
             <Btn full size="lg" className="h-16 text-lg shadow-clay-primary">Se connecter</Btn>
           </Link>
           
-          <div className="pt-8 space-y-3">
-             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant opacity-40">— Accès Rapide —</p>
-             <div className="grid grid-cols-2 gap-3">
-                {family?.users?.filter(u => u.role === 'CHILD').map(child => (
-                  <button key={child.id} onClick={() => { loginAsChild(child); navigate('/child'); }} className="group">
-                    <Card hover className="p-4 flex flex-col items-center gap-2 border-2 border-transparent hover:border-primary/20">
-                      <Avatar letter={child.avatar || child.name.charAt(0)} color={child.color} size="sm" />
-                      <span className="font-bold text-xs text-on-surface truncate w-full">{child.name}</span>
-                    </Card>
-                  </button>
-                ))}
-             </div>
-          </div>
+          {quickAccessChildren.length > 0 && (
+            <div className="pt-8 space-y-3">
+               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant opacity-40">— Accès Rapide —</p>
+               <div className="grid grid-cols-2 gap-3">
+                  {quickAccessChildren.map(child => (
+                    <button key={child.id} onClick={() => navigate('/login', { state: { prefillName: child.name } })} className="group">
+                      <Card hover className="p-4 flex flex-col items-center gap-2 border-2 border-transparent hover:border-primary/20">
+                        <Avatar letter={child.avatar || child.name.charAt(0)} color={child.color} size="sm" />
+                        <span className="font-bold text-xs text-on-surface truncate w-full">{child.name}</span>
+                      </Card>
+                    </button>
+                  ))}
+               </div>
+            </div>
+          )}
 
           <div className="pt-8 border-t border-on-surface/5 w-full text-center">
             <Link to="/signup" className="text-sm font-bold text-primary hover:underline">Créer une nouvelle famille</Link>
@@ -85,8 +90,9 @@ export function Welcome() {
 // ── Sign In Screen ─────────────────────────────────────────────────────────
 export function SignIn() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useApp();
-  const [form, setForm] = useState({ email: '', password: '' });
+  const [form, setForm] = useState({ email: location.state?.prefillName || '', password: '' });
   const [loading, setLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
 

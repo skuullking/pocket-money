@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authAPI, familyAPI, choresAPI, goalsAPI, transactionsAPI, rulesAPI } from './api';
+import { authAPI, familyAPI, choresAPI, goalsAPI, transactionsAPI, rulesAPI, expensesAPI } from './api';
+
+const CACHED_FAMILY_KEY = 'pocketmoney_cached_family_members';
 
 const AppContext = createContext(null);
 
@@ -20,6 +22,19 @@ export function AppProvider({ children }) {
   const [chores, setChores] = useState([]);
   const [goals, setGoals] = useState([]);
   const [transactions, setTransactions] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+
+  // Last-known children of this family, cached across logout so the Welcome
+  // screen's "Accès Rapide" quick-login can show avatars even before anyone
+  // is signed in (the live `family` above is only populated after login).
+  const [cachedFamilyMembers, setCachedFamilyMembers] = useState(() => {
+    try {
+      const saved = typeof window !== 'undefined' ? localStorage.getItem(CACHED_FAMILY_KEY) : null;
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
   
   const [theme, setTheme] = useState(() => {
     try {
@@ -79,15 +94,23 @@ export function AppProvider({ children }) {
   const fetchAppData = async () => {
     if (!user) return;
     try {
-      const [familyData, choresData, goalsData] = await Promise.all([
+      const [familyData, choresData, goalsData, expensesData] = await Promise.all([
         familyAPI.getFamily().catch(() => null),
         choresAPI.getChores().catch(() => ({ chores: [] })),
         goalsAPI.getGoals().catch(() => ({ goals: [] })),
+        expensesAPI.getExpenses().catch(() => ({ expenses: [] })),
       ]);
-      
-      if (familyData) setFamily(familyData.family);
+
+      if (familyData) {
+        setFamily(familyData.family);
+        const children = (familyData.family?.users || []).filter(u => u.role === 'CHILD')
+          .map(c => ({ id: c.id, name: c.name, avatar: c.avatar, color: c.color }));
+        setCachedFamilyMembers(children);
+        try { localStorage.setItem(CACHED_FAMILY_KEY, JSON.stringify(children)); } catch (e) {}
+      }
       setChores(choresData.chores || []);
       setGoals(goalsData.goals || []);
+      setExpenses(expensesData.expenses || []);
 
       if (user.role === 'CHILD') {
         const transData = await transactionsAPI.getTransactions().catch(() => ({ transactions: [] }));
@@ -213,10 +236,83 @@ export function AppProvider({ children }) {
     }
   };
 
-  const fundGoal = async (goalId, amount) => {
+  const editChore = async (choreId, data) => {
     try {
-      await goalsAPI.fundGoal(goalId, { amount });
+      await choresAPI.updateChore(choreId, data);
+      showToast('Corvée mise à jour !');
+      fetchAppData();
+    } catch (error) {
+      showToast(error.message, 'error');
+      throw error;
+    }
+  };
+
+  const deleteChore = async (choreId) => {
+    try {
+      await choresAPI.deleteChore(choreId);
+      showToast('Corvée supprimée.', 'info');
+      fetchAppData();
+    } catch (error) {
+      showToast(error.message, 'error');
+      throw error;
+    }
+  };
+
+  const fundGoal = async (goalId, amount) => {
+    const val = parseFloat(amount);
+    if (!(val > 0)) {
+      showToast('Entre un montant positif.', 'error');
+      return;
+    }
+    try {
+      await goalsAPI.fundGoal(goalId, { amount: val });
       showToast('Argent ajouté à l\'objectif !');
+      fetchAppData();
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  };
+
+  const withdrawFromGoal = async (goalId, amount) => {
+    const val = parseFloat(amount);
+    if (!(val > 0)) {
+      showToast('Entre un montant positif.', 'error');
+      return;
+    }
+    try {
+      await goalsAPI.withdrawGoal(goalId, { amount: val });
+      showToast('Argent retiré de l\'objectif.');
+      fetchAppData();
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  };
+
+  const requestExpense = async (data) => {
+    try {
+      await expensesAPI.request(data);
+      showToast('Demande envoyée à tes parents !');
+      fetchAppData();
+    } catch (error) {
+      showToast(error.message, 'error');
+      throw error;
+    }
+  };
+
+  const approveExpense = async (expenseId, data = {}) => {
+    try {
+      await expensesAPI.approve(expenseId, data);
+      showToast('Dépense approuvée.');
+      fetchAppData();
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  };
+
+  const rejectExpense = async (expenseId, data = {}) => {
+    try {
+      await expensesAPI.reject(expenseId, data);
+      showToast('Dépense refusée.', 'info');
       fetchAppData();
     } catch (error) {
       showToast(error.message, 'error');
@@ -225,7 +321,8 @@ export function AppProvider({ children }) {
 
   const updateRules = async (rules) => {
     try {
-      await familyAPI.updateRules(rules);
+      const safeRules = (rules || []).map(r => ({ ...r, amount: Math.max(0, parseFloat(r.amount) || 0) }));
+      await familyAPI.updateRules(safeRules);
       showToast('Règles mises à jour !');
       fetchAppData();
     } catch (error) {
@@ -235,8 +332,8 @@ export function AppProvider({ children }) {
 
   const applyPenalty = async (childId, ruleId) => {
     try {
-      await rulesAPI.applyPenalty(ruleId, { childId });
-      showToast('Sanction appliquée.', 'error');
+      const res = await rulesAPI.applyPenalty(ruleId, { childId });
+      showToast(res?.capped ? 'Sanction appliquée (plafonnée à 0€, solde insuffisant).' : 'Sanction appliquée.', 'error');
       fetchAppData();
     } catch (error) {
       showToast(error.message, 'error');
@@ -245,9 +342,11 @@ export function AppProvider({ children }) {
 
   return (
     <AppContext.Provider value={{
-      user, token, loading, theme, toast, showConfetti, family, chores, goals, transactions,
+      user, token, loading, theme, toast, showConfetti, family, chores, goals, transactions, expenses,
+      cachedFamilyMembers,
       login, registerParentCreate, registerParentJoin, registerChild, logout, showToast,
-      loginAsChild, triggerConfetti, addChore, approveChore, rejectChore, submitChore, fundGoal,
+      loginAsChild, triggerConfetti, addChore, approveChore, rejectChore, submitChore, editChore, deleteChore,
+      fundGoal, withdrawFromGoal, requestExpense, approveExpense, rejectExpense,
       updateRules, applyPenalty,
       toggleTheme: () => setTheme(t => t === 'dark' ? 'light' : 'dark')
     }}>

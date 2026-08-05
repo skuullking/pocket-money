@@ -69,8 +69,22 @@ iPhone 13 — viewport tactile 390×844, puis test en orientation paysage).
 4. Consolidation des anomalies observées dans `QA_BUG_REPORT.md`, avec
    preuve (capture d'écran) et étapes de reproduction pour chacune.
 
-## 4. Résultat
+## 4. Résultat — premier passage (test)
 
 16 anomalies relevées (4 critiques liées à l'argent, 3 fonctionnalités mortes,
 1 bug de mise en page mobile, plusieurs incohérences mineures/cosmétiques).
 Détail complet dans `QA_BUG_REPORT.md`.
+
+## 5. Deuxième passage (correction puis re-test)
+
+Toutes les anomalies ont été corrigées (backend + frontend), une 18e
+anomalie découverte pendant la correction (modale trop haute sur mobile,
+`MODAL-1`) a été corrigée aussi. Un script Playwright de vérification dédié
+(`verify.js` + `verify2.js`, non versionnés) a rejoué chaque scénario de bug
+— 19/19 vérifications passées, 0 erreur console restante. Voir le statut
+"Corrigé" et les preuves "avant/après" dans `QA_BUG_REPORT.md`.
+
+Seule exception volontaire : `COSMETIC-4` (écran Statistiques statique) a été
+laissé tel quel — ce n'est pas un bug d'affichage mais un message "bientôt
+disponible" assumé ; en faire un vrai écran de stats est une fonctionnalité à
+part entière, pas un correctif.
