@@ -7,13 +7,13 @@ import {
   ArrowDownRight, LogOut, Award, Star, Gift, Zap,
   ListChecks, Wallet, CheckCircle, XCircle, AlertCircle,
   Gamepad2, Bike, Music, Smartphone, Flame, Trophy,
-  MoreHorizontal, Edit3
+  MoreHorizontal, Edit3, ShoppingBag, Lock
 } from 'lucide-react';
 import { useApp } from '../context';
 import { Layout } from '../components/layout';
 import {
   Card, Btn, Badge, StatusBadge, Avatar, StatCard,
-  ProgressBar, Modal, Input, Textarea, EmptyState, Amount,
+  ProgressBar, Modal, Input, Textarea, Select, EmptyState, Amount,
 } from '../components/ui';
 
 const KID_PALETTE = [
@@ -57,11 +57,14 @@ export function ChildDashboard() {
               <p className="font-mono-num font-black text-7xl tracking-tighter leading-none">
                 €{animBalance.toFixed(2)}
               </p>
-              <div className="mt-6 flex flex-wrap justify-center sm:justify-start gap-3">
-                 <div className="bg-white/20 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/30 text-xs font-bold flex items-center gap-2">
-                    <Star size={14} className="text-gold" fill="currentColor" /> +€12.50 ce mois
-                 </div>
-              </div>
+              {typeof user.monthDelta === 'number' && user.monthDelta !== 0 && (
+                <div className="mt-6 flex flex-wrap justify-center sm:justify-start gap-3">
+                   <div className="bg-white/20 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/30 text-xs font-bold flex items-center gap-2">
+                      <Star size={14} className="text-gold" fill="currentColor" />
+                      {user.monthDelta >= 0 ? '+' : ''}€{user.monthDelta.toFixed(2)} ce mois
+                   </div>
+                </div>
+              )}
             </div>
             <div className="w-32 h-32 rounded-[2.5rem] bg-white/20 backdrop-blur-lg flex items-center justify-center border-4 border-white/40 shadow-2xl animate-float">
               <span className="text-white text-6xl">{user.avatar}</span>
@@ -244,10 +247,10 @@ const handleSubmit = async () => {
 
         <div className="space-y-6">
           <div className="bg-white dark:bg-surface-container-high rounded-[2.5rem] shadow-sticker p-8">
-            <p className="text-lg font-headline font-black text-on-surface mb-6 flex items-center gap-3">
+            <div className="text-lg font-headline font-black text-on-surface mb-6 flex items-center gap-3">
               <div className="p-2 bg-primary/10 rounded-xl text-primary"><Camera size={24} /></div>
               Preuve en image
-            </p>
+            </div>
             {photo ? (
               <div className="relative rounded-[2rem] overflow-hidden shadow-2xl group border-4 border-white dark:border-surface-container-highest">
                 <img src={photo} alt="Ma réussite" className="w-full h-80 object-cover" />
@@ -315,6 +318,24 @@ export function BalanceScreen() {
           <p className="text-white/60 text-xs font-black uppercase tracking-[0.3em] mb-4">Total accumulé</p>
           <p className="text-7xl font-mono-num font-black tracking-tighter">€{user.balance?.toFixed(2)}</p>
         </div>
+
+        {user.settings?.splitEnabled && (
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-white dark:bg-surface-container-high rounded-[2rem] p-6 text-center shadow-clay">
+              <p className="text-[10px] font-black text-on-surface-variant uppercase tracking-widest mb-2">Dépense</p>
+              <p className="text-2xl font-mono-num font-black text-on-surface">€{(user.spendBalance ?? 0).toFixed(2)}</p>
+            </div>
+            <div className="bg-white dark:bg-surface-container-high rounded-[2rem] p-6 text-center shadow-clay">
+              <p className="text-[10px] font-black text-secondary uppercase tracking-widest mb-2">Épargne</p>
+              <p className="text-2xl font-mono-num font-black text-on-surface">€{(user.saveBalance ?? 0).toFixed(2)}</p>
+            </div>
+            <div className="bg-white dark:bg-surface-container-high rounded-[2rem] p-6 text-center shadow-clay">
+              <p className="text-[10px] font-black text-tertiary uppercase tracking-widest mb-2">Don</p>
+              <p className="text-2xl font-mono-num font-black text-on-surface">€{(user.giveBalance ?? 0).toFixed(2)}</p>
+            </div>
+          </div>
+        )}
+
         <div className="space-y-6">
           <h3 className="font-headline font-black text-2xl text-on-surface tracking-tighter px-2 opacity-70 text-center">Historique des pièces</h3>
           <div className="space-y-3">
@@ -340,7 +361,7 @@ export function BalanceScreen() {
 
 export function GoalsScreen() {
   const navigate = useNavigate();
-  const { goals, user, loading, fundGoal } = useApp();
+  const { goals, user, loading, fundGoal, withdrawFromGoal } = useApp();
   if (loading || !user) return <Layout title="Objectifs"><div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div></div></Layout>;
   const myGoals = goals || [];
 
@@ -365,10 +386,16 @@ export function GoalsScreen() {
                    </div>
                    <ProgressBar value={goal.current} max={goal.target} color="success" height="lg" />
                 </div>
-                <Btn full variant="secondary" className="h-12" onClick={() => {
-                  const amount = window.prompt("Combien souhaites-tu épargner ?");
-                  if (amount) fundGoal(goal.id, amount);
-                }}>Ajouter des pièces</Btn>
+                <div className="grid grid-cols-2 gap-3">
+                  <Btn variant="secondary" className="h-12" onClick={() => {
+                    const amount = window.prompt("Combien souhaites-tu épargner ?");
+                    if (amount) fundGoal(goal.id, amount);
+                  }}>Ajouter des pièces</Btn>
+                  <Btn variant="outline" className="h-12" disabled={!goal.current} onClick={() => {
+                    const amount = window.prompt("Combien souhaites-tu retirer ?");
+                    if (amount) withdrawFromGoal(goal.id, amount);
+                  }}>Retirer</Btn>
+                </div>
               </div>
             </Card>
           ))}
@@ -391,7 +418,95 @@ export function ProfileScreen() {
             <span className="text-8xl">{user.avatar}</span>
         </div>
         <h2 className="text-5xl font-headline font-black text-on-surface tracking-tighter">{user.name}</h2>
+        <Btn full variant="outline" className="h-14" icon={ShoppingBag} onClick={() => navigate('/child/expenses')}>Mes demandes de dépense</Btn>
         <Btn full variant="ghost" className="h-16 text-lg text-error hover:bg-error-container/20" icon={LogOut} onClick={() => { logout(); navigate('/welcome'); }}>Quitter PocketMoney</Btn>
+      </div>
+    </Layout>
+  );
+}
+
+// ── Expense Requests Screen (child) ──────────────────────────────────────
+export function ExpensesScreen() {
+  const navigate = useNavigate();
+  const { user, expenses, loading, requestExpense } = useApp();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [form, setForm] = useState({ title: '', description: '', amount: '', expenseType: 'ONLINE', reference: '' });
+  const [busy, setBusy] = useState(false);
+
+  if (loading || !user) return <Layout title="Mes Dépenses"><div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div></div></Layout>;
+
+  const myExpenses = expenses || [];
+  const frozen = !!user.settings?.frozen;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (frozen || !form.title || !form.amount) return;
+    setBusy(true);
+    try {
+      await requestExpense({ ...form, amount: parseFloat(form.amount) || 0 });
+      setForm({ title: '', description: '', amount: '', expenseType: 'ONLINE', reference: '' });
+      setModalOpen(false);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Layout
+      title="Mes Dépenses"
+      showBack
+      onBack={() => navigate('/child')}
+      headerRight={<Btn size="sm" icon={Plus} disabled={frozen} onClick={() => setModalOpen(true)}>Demander</Btn>}
+    >
+      <Modal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title="Nouvelle demande de dépense"
+        footer={<Btn full loading={busy} onClick={handleSubmit}>Envoyer la demande</Btn>}
+      >
+        <form className="space-y-5" onSubmit={handleSubmit}>
+          <Input label="Quoi ?" placeholder="ex: Livre Harry Potter" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required />
+          <Textarea label="Description (optionnel)" placeholder="Précise un peu..." value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+          <Input label="Montant (€)" type="number" min="0" step="0.1" prefix="€" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} required />
+          <Select
+            label="Type"
+            value={form.expenseType}
+            onChange={e => setForm(f => ({ ...f, expenseType: e.target.value }))}
+            options={[
+              { label: 'Achat en ligne', value: 'ONLINE' },
+              { label: 'Argent liquide', value: 'CASH' },
+              { label: 'Autre', value: 'OTHER' },
+            ]}
+          />
+          <Input label="Lien / référence (optionnel)" placeholder="ex: amazon.fr/..." value={form.reference} onChange={e => setForm(f => ({ ...f, reference: e.target.value }))} />
+        </form>
+      </Modal>
+
+      <div className="max-w-2xl mx-auto space-y-4 pb-20">
+        {frozen && (
+          <Card className="p-6 bg-error-container/20 border-2 border-error/20 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-error/10 flex items-center justify-center text-error flex-shrink-0"><Lock size={22} /></div>
+            <p className="text-sm font-bold text-on-surface">Ton compte est gelé par un parent — impossible de faire une nouvelle demande pour le moment.</p>
+          </Card>
+        )}
+        {myExpenses.length === 0 && (
+          <EmptyState icon={ShoppingBag} title="Aucune demande" description="Envie de quelque chose ? Demande à tes parents." action={!frozen && <Btn onClick={() => setModalOpen(true)}>Faire une demande</Btn>} />
+        )}
+        {myExpenses.map(expense => (
+          <Card key={expense.id} className="p-6">
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className="font-headline font-extrabold text-on-surface truncate">{expense.title}</p>
+                <p className="text-xs text-on-surface-variant font-bold uppercase mt-1">{expense.expenseType}</p>
+                {expense.parentNote && <p className="text-sm text-on-surface-variant italic mt-2">"{expense.parentNote}"</p>}
+              </div>
+              <div className="text-right flex-shrink-0 space-y-2">
+                <p className="font-mono-num font-black text-primary">€{expense.approvedAmount ?? expense.amount}</p>
+                <StatusBadge status={expense.status} />
+              </div>
+            </div>
+          </Card>
+        ))}
       </div>
     </Layout>
   );

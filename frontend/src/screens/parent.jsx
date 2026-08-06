@@ -6,9 +6,14 @@ import {
   Clock, AlertCircle, TrendingUp, TrendingDown, MoreHorizontal,
   ArrowUpRight, ArrowDownRight, UserPlus, Shield, Filter,
   Search, Trash2, Edit3, Save, X, Star, Zap, Sparkles, LogOut,
-  ShoppingBag, Check, ClipboardList, MessageSquare, Image as ImageIcon
+  ShoppingBag, Check, ClipboardList, MessageSquare, Image as ImageIcon, Lock
 } from 'lucide-react';
 import { useApp } from '../context';
+import { rulesAPI, allowanceAPI, analyticsAPI } from '../api';
+import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  PieChart, Pie, Cell, LineChart, Line,
+} from 'recharts';
 import { Layout } from '../components/layout';
 import {
   Card, Btn, Badge, StatusBadge, Avatar, StatCard,
@@ -18,7 +23,7 @@ import {
 // ── Parent Dashboard ──────────────────────────────────────────────────────
 export function ParentDashboard() {
   const navigate = useNavigate();
-  const { family, chores, logout, loading } = useApp();
+  const { family, chores, expenses, logout, loading } = useApp();
 
   if (loading || !family) {
     return (
@@ -32,6 +37,7 @@ export function ParentDashboard() {
 
   const children = (family?.users || []).filter(u => u.role === 'CHILD');
   const pendingCount = (chores || []).filter(c => c.status === 'SUBMITTED' || c.status === 'submitted').length;
+  const pendingExpenseCount = (expenses || []).filter(e => e.status === 'PENDING').length;
 
   return (
     <Layout 
@@ -54,10 +60,12 @@ export function ParentDashboard() {
           onClick={() => navigate('/parent/chores')}
         />
         <StatCard
-          title="Performance"
-          value="92%"
-          sub="Taux de réussite"
-          icon={TrendingUp}
+          title="Dépenses"
+          value={pendingExpenseCount}
+          sub="Demandes en attente"
+          icon={ShoppingBag}
+          color="secondary"
+          onClick={() => navigate('/parent/expenses')}
         />
       </div>
 
@@ -134,9 +142,11 @@ export function ParentDashboard() {
 }
 
 // ── Chores List Screen ───────────────────────────────────────────────────
+const WEEKDAY_LABELS = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+
 export function ChoresList() {
   const navigate = useNavigate();
-  const { chores, family, approveChore, rejectChore, loading } = useApp();
+  const { chores, family, choreTemplates, updateChoreTemplate, deleteChoreTemplate, loading } = useApp();
   const [search, setSearch] = useState('');
 
   if (loading || !family) return <Layout title="Corvées"><div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div></div></Layout>;
@@ -226,6 +236,40 @@ export function ChoresList() {
               })}
             </div>
           </section>
+
+          {choreTemplates.length > 0 && (
+            <section>
+              <div className="flex items-center gap-4 mb-6 px-2 opacity-60">
+                <h3 className="font-headline font-black text-2xl text-on-surface tracking-tighter">Modèles récurrents</h3>
+                <div className="bg-surface-container-highest px-3 py-1 rounded-full text-on-surface-variant text-xs font-black">{choreTemplates.length}</div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {choreTemplates.map(t => {
+                  const child = children.find(u => u.id === t.assigneeId);
+                  const freqLabel = t.frequency === 'DAILY' ? 'Chaque jour' : `Chaque ${WEEKDAY_LABELS[t.weekday] || ''}`;
+                  return (
+                    <Card key={t.id} className="p-5 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-4 min-w-0">
+                        <Avatar letter={child?.avatar || child?.name?.charAt(0)} color={child?.color} size="xs" />
+                        <div className="min-w-0">
+                          <p className="font-bold text-on-surface truncate">{t.title}</p>
+                          <p className="text-xs text-on-surface-variant">{freqLabel} · €{t.reward}{!t.active && ' · en pause'}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <button onClick={() => updateChoreTemplate(t.id, { active: !t.active })} className="p-2 text-on-surface-variant hover:text-primary" title={t.active ? 'Mettre en pause' : 'Réactiver'}>
+                          {t.active ? <Clock size={16} /> : <CheckCircle size={16} />}
+                        </button>
+                        <button onClick={() => window.confirm(`Supprimer le modèle "${t.title}" ?`) && deleteChoreTemplate(t.id)} className="p-2 text-on-surface-variant hover:text-error">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            </section>
+          )}
         </div>
       </div>
     </Layout>
@@ -235,7 +279,7 @@ export function ChoresList() {
 // ── Chore Detail Screen ──────────────────────────────────────────────────
 export function ChoreDetail() {
   const navigate = useNavigate();
-  const { chores, family, approveChore, rejectChore } = useApp();
+  const { chores, family, approveChore, rejectChore, deleteChore } = useApp();
   const { choreId } = useParams();
   const chore = (chores || []).find(c => c.id === choreId);
 
@@ -252,6 +296,12 @@ export function ChoreDetail() {
   const handleReject = async () => {
     const reason = window.prompt("Raison du refus (optionnel) :");
     await rejectChore(chore.id, reason || '');
+    navigate('/parent/chores');
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm(`Supprimer définitivement "${chore.title}" ?`)) return;
+    await deleteChore(chore.id);
     navigate('/parent/chores');
   };
 
@@ -336,8 +386,8 @@ export function ChoreDetail() {
                </div>
                {!isSubmitted && (
                  <div className="pt-6 border-t border-on-surface/5 space-y-3">
-                   <Btn full variant="outline">Modifier la tâche</Btn>
-                   <button className="w-full py-3 text-xs font-bold text-error/60 hover:text-error transition-colors uppercase tracking-widest">Supprimer la corvée</button>
+                   <Btn full variant="outline" onClick={() => navigate(`/parent/chores/${chore.id}/edit`)}>Modifier la tâche</Btn>
+                   <button onClick={handleDelete} className="w-full py-3 text-xs font-bold text-error/60 hover:text-error transition-colors uppercase tracking-widest">Supprimer la corvée</button>
                  </div>
                )}
             </Card>
@@ -348,55 +398,148 @@ export function ChoreDetail() {
   );
 }
 
-// ── Create Chore Screen ──────────────────────────────────────────────────
+// ── Create / Edit Chore Screen ───────────────────────────────────────────
 export function CreateChore() {
   const navigate = useNavigate();
-  const { family, addChore, loading } = useApp();
+  const { choreId } = useParams();
+  const isEdit = !!choreId;
+  const { family, chores, addChore, editChore, createChoreTemplate, loading } = useApp();
   const children = (family?.users || []).filter(u => u.role === 'CHILD');
+  const existing = isEdit ? (chores || []).find(c => c.id === choreId) : null;
   const [form, setForm] = useState({ title: '', description: '', reward: '', assigneeId: '', deadline: 'Aujourd\'hui' });
+  const [initialized, setInitialized] = useState(false);
+  const [repeat, setRepeat] = useState(false);
+  const [repeatForm, setRepeatForm] = useState({ frequency: 'DAILY', weekday: '1' });
 
   useEffect(() => {
-    if (children.length > 0 && !form.assigneeId) {
+    if (isEdit && existing && !initialized) {
+      setForm({
+        title: existing.title || '',
+        description: existing.description || '',
+        reward: String(existing.reward ?? ''),
+        assigneeId: existing.assigneeId || '',
+        deadline: existing.deadline || 'Aujourd\'hui',
+      });
+      setInitialized(true);
+    }
+  }, [isEdit, existing, initialized]);
+
+  useEffect(() => {
+    if (!isEdit && children.length > 0 && !form.assigneeId) {
       setForm(f => ({ ...f, assigneeId: children[0].id }));
     }
-  }, [children]);
+  }, [children, isEdit]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.assigneeId) return;
-    await addChore({ ...form, reward: parseFloat(form.reward) || 0 });
+    if (isEdit) {
+      await editChore(choreId, { ...form, reward: parseFloat(form.reward) || 0 });
+    } else if (repeat) {
+      await createChoreTemplate({
+        title: form.title, description: form.description, reward: parseFloat(form.reward) || 0,
+        assigneeId: form.assigneeId, frequency: repeatForm.frequency, weekday: repeatForm.weekday,
+      });
+    } else {
+      await addChore({ ...form, reward: parseFloat(form.reward) || 0 });
+    }
     navigate('/parent/chores');
   };
 
-  if (loading || !family) return <Layout title="Nouvelle Corvée"><div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div></div></Layout>;
+  if (loading || !family) return <Layout title={isEdit ? 'Modifier la corvée' : 'Nouvelle Corvée'}><div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div></div></Layout>;
+
+  if (isEdit && !existing) {
+    return <Layout title="Erreur" showBack onBack={() => navigate('/parent/chores')}><div className="text-center py-20"><p className="font-bold text-on-surface-variant">Corvée introuvable</p></div></Layout>;
+  }
+
+  if (!isEdit && children.length === 0) {
+    return (
+      <Layout title="Nouvelle Corvée" showBack onBack={() => navigate('/parent/chores')}>
+        <div className="max-w-md mx-auto">
+          <EmptyState
+            icon={UserPlus}
+            title="Ajoutez d'abord un enfant"
+            description="Il faut au moins un enfant dans la famille pour lui assigner une corvée. Partagez le code d'invitation depuis les Paramètres."
+            action={<Btn onClick={() => navigate('/parent/settings')}>Voir le code d'invitation</Btn>}
+          />
+        </div>
+      </Layout>
+    );
+  }
 
   return (
-    <Layout title="Nouvelle Corvée" showBack onBack={() => navigate('/parent/chores')}>
+    <Layout title={isEdit ? 'Modifier la corvée' : 'Nouvelle Corvée'} showBack onBack={() => navigate(isEdit ? `/parent/chores/${choreId}` : '/parent/chores')}>
       <div className="max-w-2xl mx-auto pt-4">
         <Card className="p-10 shadow-clay-primary border-t-8 border-primary">
           <form onSubmit={handleSubmit} className="space-y-8">
             <Input label="Titre de la corvée" placeholder="ex: Ranger la cuisine" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required className="h-14 text-lg font-bold" />
             <Textarea label="Description détaillée" placeholder="Dites à votre enfant précisément ce qu'il doit faire..." value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="text-base" />
-            
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
               <Input label="Récompense (€)" type="number" min="0" step="0.1" value={form.reward} onChange={e => setForm(f => ({ ...f, reward: e.target.value }))} required className="h-14 font-mono-num font-black" prefix="€" />
               <Select label="Pour qui ?" value={form.assigneeId} onChange={e => setForm(f => ({ ...f, assigneeId: e.target.value }))} options={children.map(c => ({ label: c.name, value: c.id }))} />
             </div>
 
-            <Select
-              label="Échéance"
-              value={form.deadline}
-              onChange={e => setForm(f => ({ ...f, deadline: e.target.value }))}
-              options={[
-                { label: 'Aujourd\'hui', value: 'Aujourd\'hui' },
-                { label: 'Demain', value: 'Demain' },
-                { label: 'Ce week-end', value: 'Ce week-end' },
-                { label: 'Plus tard', value: 'Plus tard' },
-              ]}
-            />
-            
+            {!repeat && (
+              <Select
+                label="Échéance"
+                value={form.deadline}
+                onChange={e => setForm(f => ({ ...f, deadline: e.target.value }))}
+                options={[
+                  { label: 'Aujourd\'hui', value: 'Aujourd\'hui' },
+                  { label: 'Demain', value: 'Demain' },
+                  { label: 'Ce week-end', value: 'Ce week-end' },
+                  { label: 'Plus tard', value: 'Plus tard' },
+                ]}
+              />
+            )}
+
+            {!isEdit && (
+              <div className="bg-surface-container-low/50 rounded-2xl p-5 space-y-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-bold text-on-surface">Répéter cette corvée</p>
+                    <p className="text-xs text-on-surface-variant mt-1">Régénérée automatiquement, pas besoin de la recréer.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setRepeat(r => !r)}
+                    className={`w-16 h-9 rounded-full flex-shrink-0 transition-colors relative ${repeat ? 'bg-primary' : 'bg-surface-container-highest'}`}
+                  >
+                    <span className={`absolute top-1 left-1 w-7 h-7 rounded-full bg-white shadow transition-transform ${repeat ? 'translate-x-7' : ''}`} />
+                  </button>
+                </div>
+                {repeat && (
+                  <div className="grid grid-cols-2 gap-4 animate-fade-in">
+                    <Select
+                      label="Fréquence"
+                      value={repeatForm.frequency}
+                      onChange={e => setRepeatForm(f => ({ ...f, frequency: e.target.value }))}
+                      options={[
+                        { label: 'Chaque jour', value: 'DAILY' },
+                        { label: 'Chaque semaine', value: 'WEEKLY' },
+                      ]}
+                    />
+                    {repeatForm.frequency === 'WEEKLY' && (
+                      <Select
+                        label="Jour"
+                        value={repeatForm.weekday}
+                        onChange={e => setRepeatForm(f => ({ ...f, weekday: e.target.value }))}
+                        options={[
+                          { label: 'Dimanche', value: '0' }, { label: 'Lundi', value: '1' },
+                          { label: 'Mardi', value: '2' }, { label: 'Mercredi', value: '3' },
+                          { label: 'Jeudi', value: '4' }, { label: 'Vendredi', value: '5' },
+                          { label: 'Samedi', value: '6' },
+                        ]}
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="pt-6">
-              <Btn type="submit" full icon={Save} className="h-16 text-lg shadow-clay-primary">Lancer la mission !</Btn>
+              <Btn type="submit" full icon={Save} className="h-16 text-lg shadow-clay-primary">{isEdit ? 'Enregistrer les modifications' : (repeat ? 'Créer le modèle récurrent' : 'Lancer la mission !')}</Btn>
             </div>
           </form>
         </Card>
@@ -408,7 +551,7 @@ export function CreateChore() {
 // ── Children Management Screen ───────────────────────────────────────────
 export function ChildrenView() {
   const navigate = useNavigate();
-  const { family, loading, applyPenalty } = useApp();
+  const { family, loading, applyPenalty, showToast } = useApp();
   const children = (family?.users || []).filter(u => u.role === 'CHILD');
   const rules = (family?.rules || []).filter(r => r.active !== false);
 
@@ -478,10 +621,10 @@ export function ChildrenView() {
                   Aucune règle définie.
                 </p>
                 <button
-                  onClick={() => { setSanctionModal(null); navigate('/parent/settings'); }}
+                  onClick={() => { setSanctionModal(null); navigate('/parent/rules'); }}
                   className="text-sm text-primary font-label font-bold hover:underline cursor-pointer"
                 >
-                  Créer des sanctions dans Paramètres →
+                  Créer des règles →
                 </button>
               </div>
             ) : (
@@ -532,6 +675,9 @@ export function ChildrenView() {
               <div className="space-y-1">
                 <h4 className="text-3xl font-headline font-black text-on-surface tracking-tighter leading-none">{child.name}</h4>
                 <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest opacity-60">Explorateur · {child.age} ans</p>
+                {child.settings?.frozen && (
+                  <Badge variant="danger" size="sm"><Lock size={10} className="inline -mt-0.5 mr-1" />Compte gelé</Badge>
+                )}
               </div>
 
               <div className="w-full bg-primary/5 dark:bg-white/5 rounded-3xl p-4 border border-primary/10">
@@ -542,7 +688,7 @@ export function ChildrenView() {
               <div className="grid grid-cols-1 gap-3 w-full">
                 <Btn full variant="primary" icon={Plus} onClick={() => navigate('/parent/chores/new')} className="h-12">Assigner une corvée</Btn>
                 <div className="grid grid-cols-2 gap-3">
-                  <Btn variant="outline" size="sm" icon={Edit3} onClick={() => navigate('/parent/settings')} className="h-12">Gérer</Btn>
+                  <Btn variant="outline" size="sm" icon={Edit3} onClick={() => navigate(`/parent/children/${child.id}/settings`)} className="h-12">Gérer</Btn>
                   <Btn variant="danger" size="sm" icon={AlertCircle} onClick={() => openSanction(child)} className="h-12">Sanction</Btn>
                 </div>
               </div>
@@ -550,7 +696,10 @@ export function ChildrenView() {
           </Card>
         ))}
 
-        <button onClick={() => {}} className="border-4 border-dashed border-on-surface/5 rounded-[2.5rem] p-12 flex flex-col items-center justify-center gap-4 hover:bg-primary/5 hover:border-primary/20 transition-all group">
+        <button
+          onClick={() => { showToast('Partagez votre code d\'invitation avec votre enfant pour qu\'il crée son compte.', 'info'); navigate('/parent/settings'); }}
+          className="border-4 border-dashed border-on-surface/5 rounded-[2.5rem] p-12 flex flex-col items-center justify-center gap-4 hover:bg-primary/5 hover:border-primary/20 transition-all group"
+        >
           <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
             <UserPlus size={32} />
           </div>
@@ -562,56 +711,84 @@ export function ChildrenView() {
 }
 
 // ── Rules and Penalties Screen ───────────────────────────────────────────
+// Chaque règle a une identité persistante (CRUD unitaire) — plus de
+// remplacement en bloc qui perdait les identifiants à chaque édition.
 export function RulesScreen() {
   const navigate = useNavigate();
-  const { family, updateRules, loading } = useApp();
-  const [localRules, setLocalRules] = useState([]);
-
-  useEffect(() => {
-    if (family?.rules) {
-      setLocalRules(family.rules);
-    }
-  }, [family]);
-
-  const handleAdd = () => setLocalRules([...localRules, { title: '', amount: '0' }]);
-  const handleRemove = (index) => setLocalRules(localRules.filter((_, i) => i !== index));
-  const handleChange = (index, field, value) => {
-    const next = [...localRules];
-    next[index][field] = value;
-    setLocalRules(next);
-  };
-
-  const handleSave = async () => {
-    await updateRules(localRules.filter(r => r.title));
-  };
+  const { family, createRule, editRule, deleteRule, loading } = useApp();
+  const rules = family?.rules || [];
+  const [editingId, setEditingId] = useState(null); // null = pas de formulaire, 'new' = création
+  const [form, setForm] = useState({ title: '', description: '', amount: '' });
+  const [busy, setBusy] = useState(false);
 
   if (loading || !family) return <Layout title="Règles"><div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div></div></Layout>;
 
+  const startCreate = () => { setForm({ title: '', description: '', amount: '' }); setEditingId('new'); };
+  const startEdit = (rule) => { setForm({ title: rule.title, description: rule.description || '', amount: String(rule.amount) }); setEditingId(rule.id); };
+
+  const handleSave = async () => {
+    if (!form.title.trim()) return;
+    setBusy(true);
+    try {
+      if (editingId === 'new') await createRule(form);
+      else await editRule(editingId, form);
+      setEditingId(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDelete = async (rule) => {
+    if (!window.confirm(`Supprimer la règle "${rule.title}" ?`)) return;
+    await deleteRule(rule.id);
+  };
+
   return (
-    <Layout title="Règles & Amendes" showBack onBack={() => navigate('/parent')}>
+    <Layout
+      title="Règles & Amendes"
+      showBack
+      onBack={() => navigate('/parent')}
+      headerRight={<Btn size="sm" variant="outline" onClick={() => navigate('/parent/rules/history')}>Historique</Btn>}
+    >
       <div className="max-w-2xl mx-auto py-4 space-y-8">
         <Card className="p-8">
           <div className="flex items-center justify-between mb-8">
-             <h3 className="font-headline font-black text-2xl tracking-tighter">Liste des amendes</h3>
-             <Btn size="sm" icon={Plus} onClick={handleAdd}>Ajouter</Btn>
+             <h3 className="font-headline font-black text-2xl tracking-tighter">Liste des sanctions</h3>
+             {editingId === null && <Btn size="sm" icon={Plus} onClick={startCreate}>Ajouter</Btn>}
           </div>
 
-          <div className="space-y-4">
-            {localRules.map((rule, i) => (
-              <div key={i} className="flex gap-4 items-end animate-fade-in">
-                 <div className="flex-1">
-                    <Input label={i === 0 ? "Motif" : ""} value={rule.title} onChange={e => handleChange(i, 'title', e.target.value)} />
-                 </div>
-                 <div className="w-24">
-                    <Input label={i === 0 ? "Prix" : ""} type="number" value={rule.amount} onChange={e => handleChange(i, 'amount', e.target.value)} />
-                 </div>
-                 <button onClick={() => handleRemove(i)} className="p-4 text-error mb-1"><Trash2 size={20} /></button>
+          {editingId !== null && (
+            <div className="space-y-4 mb-8 p-5 bg-surface-container-low/50 rounded-2xl animate-fade-in">
+              <Input label="Motif" placeholder="ex: Chambre non rangée" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+              <Input label="Description (optionnel)" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+              <Input label="Montant (€)" type="number" min="0" step="0.5" prefix="€" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
+              <div className="grid grid-cols-2 gap-3">
+                <Btn variant="outline" onClick={() => setEditingId(null)}>Annuler</Btn>
+                <Btn loading={busy} onClick={handleSave}>Enregistrer</Btn>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {rules.length === 0 && editingId === null && (
+              <div className="text-center py-8 text-on-surface-variant/50">
+                <Shield size={36} className="mx-auto mb-3 opacity-40" />
+                <p className="text-sm font-body">Aucune sanction définie. Ajoutez-en une !</p>
+              </div>
+            )}
+            {rules.map(rule => (
+              <div key={rule.id} className="flex items-center justify-between gap-4 bg-white dark:bg-surface-container-high rounded-2xl p-4 shadow-clay-well">
+                <div className="min-w-0">
+                  <p className="font-bold text-on-surface">{rule.title}</p>
+                  {rule.description && <p className="text-xs text-on-surface-variant mt-0.5">{rule.description}</p>}
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="font-mono-num font-black text-error">-€{rule.amount}</span>
+                  <button onClick={() => startEdit(rule)} className="p-2 text-on-surface-variant hover:text-primary"><Edit3 size={16} /></button>
+                  <button onClick={() => handleDelete(rule)} className="p-2 text-on-surface-variant hover:text-error"><Trash2 size={16} /></button>
+                </div>
               </div>
             ))}
-          </div>
-
-          <div className="mt-10 pt-6 border-t border-on-surface/5">
-             <Btn full icon={Save} onClick={handleSave}>Enregistrer les règles</Btn>
           </div>
         </Card>
       </div>
@@ -619,22 +796,158 @@ export function RulesScreen() {
   );
 }
 
-// ── Analytics Screen ─────────────────────────────────────────────────────
-export function AnalyticsScreen() {
+// ── Penalty History Screen ────────────────────────────────────────────────
+export function PenaltyHistoryScreen() {
   const navigate = useNavigate();
+  const { loading } = useApp();
+  const [history, setHistory] = useState(null);
+
+  useEffect(() => {
+    rulesAPI.getPenaltyHistory().then(res => setHistory(res.history || [])).catch(() => setHistory([]));
+  }, []);
+
+  if (loading || history === null) return <Layout title="Historique" showBack onBack={() => navigate('/parent/rules')}><div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div></div></Layout>;
+
+  return (
+    <Layout title="Historique des sanctions" showBack onBack={() => navigate('/parent/rules')}>
+      <div className="max-w-2xl mx-auto space-y-3 pb-20">
+        {history.length === 0 && <EmptyState icon={Shield} title="Aucune sanction appliquée" description="L'historique apparaîtra ici dès la première sanction." />}
+        {history.map(entry => (
+          <Card key={entry.id} className="p-5">
+            <div className="flex items-center gap-4">
+              <Avatar letter={entry.child?.avatar || entry.child?.name?.charAt(0)} color={entry.child?.color} size="sm" />
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-on-surface truncate">{entry.description}</p>
+                <p className="text-xs text-on-surface-variant">{entry.child?.name} · {new Date(entry.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+              </div>
+              <span className="font-mono-num font-black text-error flex-shrink-0">{entry.amount.toFixed(2)}€</span>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </Layout>
+  );
+}
+
+// ── Analytics Screen ─────────────────────────────────────────────────────
+const CHART_COLORS = { primary: '#8a5a1f', secondary: '#2E75B6', tertiary: '#7B61FF', error: '#d64545', gold: '#eab308' };
+const STATUS_LABELS = { PENDING: 'En attente', SUBMITTED: 'À valider', COMPLETED: 'Terminées', REJECTED: 'Refusées' };
+const CATEGORY_LABELS = { ONLINE: 'En ligne', CASH: 'Liquide', OTHER: 'Autre' };
+
+export function AnalyticsScreen() {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    analyticsAPI.getOverview().then(setData).catch(e => setError(e.message));
+  }, []);
+
+  if (error) {
+    return <Layout title="Statistiques"><div className="text-center py-20 text-on-surface-variant">{error}</div></Layout>;
+  }
+  if (!data) {
+    return <Layout title="Statistiques"><div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div></div></Layout>;
+  }
+
+  const choreData = (data.choreCounts || []).map(c => ({ name: STATUS_LABELS[c.status] || c.status, value: c.count }));
+  const totalChores = choreData.reduce((sum, c) => sum + c.value, 0);
+  const completedChores = data.choreCounts?.find(c => c.status === 'COMPLETED')?.count || 0;
+
+  const weeklyData = (data.weeklyCompletion || []).map(w => ({
+    semaine: new Date(w.week).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+    complétées: w.completed,
+    total: w.total,
+  }));
+
+  const categoryData = (data.spendingByCategory || []).filter(c => c.total > 0).map(c => ({ name: CATEGORY_LABELS[c.category] || c.category, value: c.total }));
+  const totalSpent = categoryData.reduce((sum, c) => sum + c.value, 0);
+
+  const savingsData = (data.savingsTrend || []).map(s => ({
+    date: new Date(s.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+    épargné: s.cumulative,
+  }));
+
+  const childData = (data.perChild || []).map(c => ({ name: c.name, gagné: c.earned, dépensé: c.spent }));
+  const pieColors = [CHART_COLORS.primary, CHART_COLORS.secondary, CHART_COLORS.tertiary, CHART_COLORS.error];
+
   return (
     <Layout title="Statistiques">
-      <div className="max-w-4xl mx-auto space-y-10">
+      <div className="max-w-4xl mx-auto space-y-8 pb-20">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <StatCard title="Corvées terminées" value={completedChores} sub={`sur ${totalChores} au total`} icon={CheckCircle} />
+          <StatCard title="Total dépensé" value={`€${totalSpent.toFixed(2)}`} sub="Dépenses approuvées" icon={ShoppingBag} color="secondary" />
+          <StatCard title="Total épargné" value={`€${(savingsData[savingsData.length - 1]?.épargné || 0).toFixed(2)}`} sub="Dans les objectifs" icon={TrendingUp} />
+        </div>
+
         <Card className="p-8">
-          <div className="flex items-center justify-between mb-10">
-            <h3 className="font-headline font-black text-2xl tracking-tighter">Activité Mensuelle</h3>
-            <div className="p-2 bg-secondary/10 rounded-xl text-secondary"><BarChart2 size={24} /></div>
-          </div>
-          <div className="h-64 bg-surface-variant/20 rounded-[2rem] flex flex-col items-center justify-center border-2 border-dashed border-on-surface/5">
-            <Sparkles size={48} className="text-gold mb-4 animate-pulse" />
-            <p className="text-on-surface-variant font-extrabold text-lg tracking-tight">Vos données arrivent !</p>
-            <p className="text-xs font-bold text-on-surface-variant/50 uppercase tracking-widest mt-1">Calcul des statistiques en cours...</p>
-          </div>
+          <h3 className="font-headline font-black text-2xl tracking-tighter mb-6">Corvées par semaine</h3>
+          {weeklyData.length === 0 ? (
+            <p className="text-center py-16 text-on-surface-variant opacity-60">Pas encore assez de données.</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={weeklyData}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                <XAxis dataKey="semaine" fontSize={12} />
+                <YAxis fontSize={12} allowDecimals={false} />
+                <Tooltip />
+                <Bar dataKey="total" fill={CHART_COLORS.secondary} opacity={0.35} radius={[8, 8, 0, 0]} />
+                <Bar dataKey="complétées" fill={CHART_COLORS.primary} radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </Card>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <Card className="p-8">
+            <h3 className="font-headline font-black text-2xl tracking-tighter mb-6">Dépenses par catégorie</h3>
+            {categoryData.length === 0 ? (
+              <p className="text-center py-16 text-on-surface-variant opacity-60">Aucune dépense approuvée.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={240}>
+                <PieChart>
+                  <Pie data={categoryData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                    {categoryData.map((entry, i) => <Cell key={entry.name} fill={pieColors[i % pieColors.length]} />)}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </Card>
+
+          <Card className="p-8">
+            <h3 className="font-headline font-black text-2xl tracking-tighter mb-6">Tendance d'épargne</h3>
+            {savingsData.length === 0 ? (
+              <p className="text-center py-16 text-on-surface-variant opacity-60">Pas encore d'épargne.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={240}>
+                <LineChart data={savingsData}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                  <XAxis dataKey="date" fontSize={12} />
+                  <YAxis fontSize={12} />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="épargné" stroke={CHART_COLORS.secondary} strokeWidth={3} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </Card>
+        </div>
+
+        <Card className="p-8">
+          <h3 className="font-headline font-black text-2xl tracking-tighter mb-6">Comparaison entre enfants</h3>
+          {childData.length === 0 ? (
+            <p className="text-center py-16 text-on-surface-variant opacity-60">Aucun enfant dans la famille.</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={childData}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                <XAxis dataKey="name" fontSize={12} />
+                <YAxis fontSize={12} />
+                <Tooltip />
+                <Bar dataKey="gagné" fill={CHART_COLORS.primary} radius={[8, 8, 0, 0]} />
+                <Bar dataKey="dépensé" fill={CHART_COLORS.error} radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </Card>
       </div>
     </Layout>
@@ -643,26 +956,10 @@ export function AnalyticsScreen() {
 
 // ── Settings Screen ──────────────────────────────────────────────────────
 export function SettingsScreen() {
-  const { family, logout, loading, updateRules } = useApp();
+  const { family, logout, loading } = useApp();
   const navigate = useNavigate();
-  const [localRules, setLocalRules] = useState([]);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (family?.rules) setLocalRules(family.rules);
-  }, [family]);
 
   const handleLogout = () => { logout(); navigate('/welcome'); };
-
-  const handleAddRule = () => setLocalRules(prev => [...prev, { id: `new_${Date.now()}`, title: '', description: '', amount: '', active: true }]);
-  const handleRemoveRule = (idx) => setLocalRules(prev => prev.filter((_, i) => i !== idx));
-  const handleRuleChange = (idx, field, value) => setLocalRules(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
-
-  const handleSaveRules = async () => {
-    setSaving(true);
-    await updateRules(localRules.filter(r => r.title.trim()));
-    setSaving(false);
-  };
 
   if (loading || !family) return <Layout title="Paramètres"><div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div></div></Layout>;
 
@@ -682,64 +979,15 @@ export function SettingsScreen() {
           </div>
         </Card>
 
-        {/* Rules & Sanctions */}
+        {/* Rules & Sanctions — édition complète sur /parent/rules */}
         <Card className="p-8">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between">
             <div>
               <h3 className="font-headline font-black text-2xl tracking-tighter">Sanctions & Règles</h3>
-              <p className="text-xs text-on-surface-variant font-body mt-1">Appliquables depuis l'onglet Enfants</p>
+              <p className="text-xs text-on-surface-variant font-body mt-1">{(family?.rules || []).length} règle(s) définie(s)</p>
             </div>
-            <Btn size="sm" icon={Plus} onClick={handleAddRule}>Ajouter</Btn>
+            <Btn size="sm" icon={Shield} variant="outline" onClick={() => navigate('/parent/rules')}>Gérer</Btn>
           </div>
-
-          <div className="space-y-3">
-            {localRules.length === 0 && (
-              <div className="text-center py-8 text-on-surface-variant/50">
-                <Shield size={36} className="mx-auto mb-3 opacity-40" />
-                <p className="text-sm font-body">Aucune sanction définie. Ajoutez-en une !</p>
-              </div>
-            )}
-            {localRules.map((rule, i) => (
-              <div key={rule.id || i} className="flex gap-3 items-start bg-surface-container-low/50 rounded-2xl p-4 animate-fade-in">
-                <div className="flex-1 space-y-2">
-                  <Input
-                    placeholder="Motif (ex: Mauvais comportement…)"
-                    value={rule.title}
-                    onChange={e => handleRuleChange(i, 'title', e.target.value)}
-                  />
-                  <Input
-                    placeholder="Description (optionnel)"
-                    value={rule.description || ''}
-                    onChange={e => handleRuleChange(i, 'description', e.target.value)}
-                  />
-                </div>
-                <div className="w-24 flex-shrink-0">
-                  <Input
-                    type="number"
-                    placeholder="€"
-                    min="0"
-                    step="0.5"
-                    value={rule.amount}
-                    onChange={e => handleRuleChange(i, 'amount', e.target.value)}
-                  />
-                </div>
-                <button
-                  onClick={() => handleRemoveRule(i)}
-                  className="p-3 text-error hover:bg-error-container/30 rounded-xl transition-colors flex-shrink-0 mt-1 cursor-pointer"
-                >
-                  <Trash2 size={18} />
-                </button>
-              </div>
-            ))}
-          </div>
-
-          {localRules.length > 0 && (
-            <div className="mt-6 pt-5 border-t border-on-surface/5">
-              <Btn full icon={Save} loading={saving} onClick={handleSaveRules}>
-                Enregistrer les sanctions
-              </Btn>
-            </div>
-          )}
         </Card>
 
         {/* Danger zone */}
@@ -747,6 +995,293 @@ export function SettingsScreen() {
           <Btn variant="danger" full icon={LogOut} onClick={handleLogout} className="h-16 text-lg">
             Se déconnecter
           </Btn>
+        </Card>
+      </div>
+    </Layout>
+  );
+}
+
+// ── Expense Requests Review Screen ───────────────────────────────────────
+export function ExpensesReview() {
+  const navigate = useNavigate();
+  const { family, expenses, loading, approveExpense, rejectExpense } = useApp();
+  const [approveModal, setApproveModal] = useState(null); // expense
+  const [amount, setAmount] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  if (loading || !family) return <Layout title="Dépenses" showBack onBack={() => navigate('/parent')}><div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div></div></Layout>;
+
+  const children = (family?.users || []).filter(u => u.role === 'CHILD');
+  const pending = (expenses || []).filter(e => e.status === 'PENDING');
+  const resolved = (expenses || []).filter(e => e.status !== 'PENDING');
+
+  const openApprove = (expense) => { setAmount(String(expense.amount)); setApproveModal(expense); };
+
+  const handleApprove = async () => {
+    if (!approveModal) return;
+    setBusy(true);
+    await approveExpense(approveModal.id, { approvedAmount: amount });
+    setBusy(false);
+    setApproveModal(null);
+  };
+
+  const handleReject = async (expense) => {
+    const reason = window.prompt('Raison du refus (optionnel) :');
+    await rejectExpense(expense.id, { parentNote: reason || '' });
+  };
+
+  return (
+    <Layout title="Dépenses" showBack onBack={() => navigate('/parent')}>
+      <Modal
+        open={!!approveModal}
+        onClose={() => setApproveModal(null)}
+        title={`Approuver "${approveModal?.title}"`}
+        footer={
+          <Btn full variant="secondary" loading={busy} onClick={handleApprove}>Approuver {amount ? `(€${amount})` : ''}</Btn>
+        }
+      >
+        {approveModal && (
+          <div className="space-y-4">
+            <p className="text-sm text-on-surface-variant">Demande de <b>{approveModal.child?.name}</b> : {approveModal.description || 'Aucune description'}</p>
+            <Input label="Montant approuvé (€)" type="number" min="0" step="0.1" value={amount} onChange={e => setAmount(e.target.value)} prefix="€" />
+          </div>
+        )}
+      </Modal>
+
+      <div className="max-w-3xl mx-auto space-y-12 pb-20">
+        <section>
+          <h3 className="font-headline font-black text-2xl text-on-surface tracking-tighter mb-6">À traiter ({pending.length})</h3>
+          {pending.length === 0 ? (
+            <EmptyState icon={ShoppingBag} title="Rien à traiter" description="Aucune demande de dépense en attente." />
+          ) : (
+            <div className="space-y-4">
+              {pending.map(expense => (
+                <Card key={expense.id} className="p-6">
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div className="flex items-center gap-4 min-w-0">
+                      <Avatar letter={expense.child?.avatar || expense.child?.name?.charAt(0)} size="sm" />
+                      <div className="min-w-0">
+                        <p className="font-headline font-extrabold text-on-surface truncate">{expense.title}</p>
+                        <p className="text-xs text-on-surface-variant font-bold uppercase">{expense.child?.name} · €{expense.amount}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <Btn size="sm" variant="secondary" icon={Check} onClick={() => openApprove(expense)}>Approuver</Btn>
+                      <Btn size="sm" variant="danger" icon={X} onClick={() => handleReject(expense)}>Refuser</Btn>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {resolved.length > 0 && (
+          <section>
+            <h3 className="font-headline font-black text-2xl text-on-surface tracking-tighter mb-6 opacity-60">Historique</h3>
+            <div className="space-y-3">
+              {resolved.map(expense => (
+                <Card key={expense.id} className="p-5 opacity-80">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="font-bold text-on-surface truncate">{expense.title}</p>
+                      <p className="text-xs text-on-surface-variant">{expense.child?.name}</p>
+                    </div>
+                    <StatusBadge status={expense.status} />
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+    </Layout>
+  );
+}
+
+// ── Child Settings Screen (limites, gel de compte) ───────────────────────
+export function ChildSettingsScreen() {
+  const navigate = useNavigate();
+  const { childId } = useParams();
+  const { family, loading, updateChildSettings, updateAllowance, updateSplitSettings } = useApp();
+  const child = (family?.users || []).find(u => u.id === childId);
+  const [form, setForm] = useState({ maxExpensePerRequest: '', maxExpensePerWeek: '', frozen: false });
+  const [initialized, setInitialized] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const [splitForm, setSplitForm] = useState({ splitEnabled: false, splitSavePct: '0', splitSpendPct: '100', splitGivePct: '0' });
+  const [savingSplit, setSavingSplit] = useState(false);
+
+  const [allowanceForm, setAllowanceForm] = useState({ amount: '', frequency: 'WEEKLY', active: true });
+  const [allowanceInitialized, setAllowanceInitialized] = useState(false);
+  const [savingAllowance, setSavingAllowance] = useState(false);
+
+  useEffect(() => {
+    if (child?.settings && !initialized) {
+      setForm({
+        maxExpensePerRequest: child.settings.maxExpensePerRequest ?? '',
+        maxExpensePerWeek: child.settings.maxExpensePerWeek ?? '',
+        frozen: !!child.settings.frozen,
+      });
+      setSplitForm({
+        splitEnabled: !!child.settings.splitEnabled,
+        splitSavePct: String(child.settings.splitSavePct ?? 0),
+        splitSpendPct: String(child.settings.splitSpendPct ?? 100),
+        splitGivePct: String(child.settings.splitGivePct ?? 0),
+      });
+      setInitialized(true);
+    }
+  }, [child, initialized]);
+
+  useEffect(() => {
+    if (!childId || allowanceInitialized) return;
+    allowanceAPI.get(childId).then(res => {
+      if (res.allowance) {
+        setAllowanceForm({
+          amount: String(res.allowance.amount),
+          frequency: res.allowance.frequency,
+          active: res.allowance.active,
+        });
+      }
+      setAllowanceInitialized(true);
+    }).catch(() => setAllowanceInitialized(true));
+  }, [childId, allowanceInitialized]);
+
+  if (loading || !family) return <Layout title="Réglages"><div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div></div></Layout>;
+  if (!child) return <Layout title="Erreur" showBack onBack={() => navigate('/parent/children')}><div className="text-center py-20"><p className="font-bold text-on-surface-variant">Enfant introuvable</p></div></Layout>;
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await updateChildSettings(child.id, form);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveAllowance = async () => {
+    setSavingAllowance(true);
+    try {
+      await updateAllowance(child.id, allowanceForm);
+    } finally {
+      setSavingAllowance(false);
+    }
+  };
+
+  const splitTotal = (parseFloat(splitForm.splitSavePct) || 0) + (parseFloat(splitForm.splitSpendPct) || 0) + (parseFloat(splitForm.splitGivePct) || 0);
+  const handleSaveSplit = async () => {
+    if (Math.round(splitTotal) !== 100) return;
+    setSavingSplit(true);
+    try {
+      await updateSplitSettings(child.id, splitForm);
+    } finally {
+      setSavingSplit(false);
+    }
+  };
+
+  return (
+    <Layout title={`Réglages · ${child.name}`} showBack onBack={() => navigate('/parent/children')}>
+      <div className="max-w-2xl mx-auto space-y-8">
+        <Card className="p-8 flex items-center gap-5">
+          <Avatar letter={child.avatar || child.name.charAt(0)} color={child.color} size="lg" />
+          <div>
+            <h3 className="text-2xl font-headline font-black text-on-surface tracking-tight">{child.name}</h3>
+            <p className="text-sm text-on-surface-variant font-mono-num font-bold">Solde : €{(child.balance || 0).toFixed(2)}</p>
+          </div>
+        </Card>
+
+        <Card className="p-8 space-y-6">
+          <h3 className="font-headline font-black text-2xl tracking-tighter">Argent de poche récurrent</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Montant (€)"
+              type="number" min="0" step="0.5" prefix="€"
+              value={allowanceForm.amount}
+              onChange={e => setAllowanceForm(f => ({ ...f, amount: e.target.value }))}
+            />
+            <Select
+              label="Fréquence"
+              value={allowanceForm.frequency}
+              onChange={e => setAllowanceForm(f => ({ ...f, frequency: e.target.value }))}
+              options={[
+                { label: 'Chaque semaine', value: 'WEEKLY' },
+                { label: 'Chaque mois', value: 'MONTHLY' },
+              ]}
+            />
+          </div>
+          <div className="flex items-center justify-between bg-surface-container-low/50 rounded-2xl p-5">
+            <div>
+              <p className="font-bold text-on-surface">Activer le versement automatique</p>
+              <p className="text-xs text-on-surface-variant mt-1">Crédité automatiquement à la bonne fréquence.</p>
+            </div>
+            <button
+              onClick={() => setAllowanceForm(f => ({ ...f, active: !f.active }))}
+              className={`w-16 h-9 rounded-full flex-shrink-0 transition-colors relative ${allowanceForm.active ? 'bg-primary' : 'bg-surface-container-highest'}`}
+            >
+              <span className={`absolute top-1 left-1 w-7 h-7 rounded-full bg-white shadow transition-transform ${allowanceForm.active ? 'translate-x-7' : ''}`} />
+            </button>
+          </div>
+          <Btn full icon={Save} loading={savingAllowance} onClick={handleSaveAllowance}>Enregistrer</Btn>
+        </Card>
+
+        <Card className="p-8 space-y-6">
+          <div>
+            <h3 className="font-headline font-black text-2xl tracking-tighter">Répartition Épargne / Dépense / Don</h3>
+            <p className="text-xs text-on-surface-variant font-body mt-1">Répartit automatiquement chaque gain (corvée, argent de poche) — sans limiter ce que l'enfant peut dépenser.</p>
+          </div>
+          <div className="flex items-center justify-between bg-surface-container-low/50 rounded-2xl p-5">
+            <p className="font-bold text-on-surface">Activer la répartition</p>
+            <button
+              onClick={() => setSplitForm(f => ({ ...f, splitEnabled: !f.splitEnabled }))}
+              className={`w-16 h-9 rounded-full flex-shrink-0 transition-colors relative ${splitForm.splitEnabled ? 'bg-primary' : 'bg-surface-container-highest'}`}
+            >
+              <span className={`absolute top-1 left-1 w-7 h-7 rounded-full bg-white shadow transition-transform ${splitForm.splitEnabled ? 'translate-x-7' : ''}`} />
+            </button>
+          </div>
+          {splitForm.splitEnabled && (
+            <div className="grid grid-cols-3 gap-3 animate-fade-in">
+              <Input label="Dépense %" type="number" min="0" max="100" value={splitForm.splitSpendPct} onChange={e => setSplitForm(f => ({ ...f, splitSpendPct: e.target.value }))} />
+              <Input label="Épargne %" type="number" min="0" max="100" value={splitForm.splitSavePct} onChange={e => setSplitForm(f => ({ ...f, splitSavePct: e.target.value }))} />
+              <Input label="Don %" type="number" min="0" max="100" value={splitForm.splitGivePct} onChange={e => setSplitForm(f => ({ ...f, splitGivePct: e.target.value }))} />
+            </div>
+          )}
+          {splitForm.splitEnabled && (
+            <p className={`text-xs font-bold ${Math.round(splitTotal) === 100 ? 'text-secondary' : 'text-error'}`}>
+              Total : {splitTotal}% {Math.round(splitTotal) === 100 ? '✓' : '(doit faire 100%)'}
+            </p>
+          )}
+          <Btn full icon={Save} loading={savingSplit} disabled={splitForm.splitEnabled && Math.round(splitTotal) !== 100} onClick={handleSaveSplit}>Enregistrer</Btn>
+        </Card>
+
+        <Card className="p-8 space-y-6">
+          <h3 className="font-headline font-black text-2xl tracking-tighter">Limites de dépenses</h3>
+          <Input
+            label="Maximum par demande (€)"
+            type="number" min="0" step="1" prefix="€"
+            placeholder="Aucune limite"
+            value={form.maxExpensePerRequest}
+            onChange={e => setForm(f => ({ ...f, maxExpensePerRequest: e.target.value }))}
+          />
+          <Input
+            label="Maximum par semaine (€)"
+            type="number" min="0" step="1" prefix="€"
+            placeholder="Aucune limite"
+            value={form.maxExpensePerWeek}
+            onChange={e => setForm(f => ({ ...f, maxExpensePerWeek: e.target.value }))}
+          />
+          <div className="flex items-center justify-between bg-surface-container-low/50 rounded-2xl p-5">
+            <div>
+              <p className="font-bold text-on-surface">Geler le compte</p>
+              <p className="text-xs text-on-surface-variant mt-1">Bloque toute nouvelle demande de dépense.</p>
+            </div>
+            <button
+              onClick={() => setForm(f => ({ ...f, frozen: !f.frozen }))}
+              className={`w-16 h-9 rounded-full flex-shrink-0 transition-colors relative ${form.frozen ? 'bg-error' : 'bg-surface-container-highest'}`}
+            >
+              <span className={`absolute top-1 left-1 w-7 h-7 rounded-full bg-white shadow transition-transform ${form.frozen ? 'translate-x-7' : ''}`} />
+            </button>
+          </div>
+          <Btn full icon={Save} loading={saving} onClick={handleSave}>Enregistrer</Btn>
         </Card>
       </div>
     </Layout>

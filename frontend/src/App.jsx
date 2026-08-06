@@ -3,9 +3,9 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useApp } from './context';
 
 // Import basic components
-import { Welcome, SignIn, SignUp, Splash } from './screens/auth.jsx';
-import { ParentDashboard, ChoresList, ChoreDetail, CreateChore, ChildrenView, RulesScreen, AnalyticsScreen, SettingsScreen } from './screens/parent.jsx';
-import { ChildDashboard, AvailableChores, SubmitChore, MyChores, BalanceScreen, GoalsScreen, ProfileScreen } from './screens/child.jsx';
+import { Welcome, SignIn, SignUp, Splash, ForgotPassword, ResetPassword } from './screens/auth.jsx';
+import { ParentDashboard, ChoresList, ChoreDetail, CreateChore, ChildrenView, RulesScreen, PenaltyHistoryScreen, AnalyticsScreen, SettingsScreen, ExpensesReview, ChildSettingsScreen } from './screens/parent.jsx';
+import { ChildDashboard, AvailableChores, SubmitChore, MyChores, BalanceScreen, GoalsScreen, ProfileScreen, ExpensesScreen } from './screens/child.jsx';
 
 function AppRoutes() {
   const context = useApp();
@@ -30,16 +30,22 @@ function AppRoutes() {
       <Route path="/welcome" element={<Welcome />} />
       <Route path="/login" element={<SignIn />} />
       <Route path="/signup" element={<SignUp />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       
       {/* Parent */}
       <Route path="/parent" element={<ParentDashboard />} />
       <Route path="/parent/chores" element={<ChoresList />} />
       <Route path="/parent/chores/:choreId" element={<ChoreDetail />} />
       <Route path="/parent/chores/new" element={<CreateChore />} />
+      <Route path="/parent/chores/:choreId/edit" element={<CreateChore />} />
       <Route path="/parent/children" element={<ChildrenView />} />
+      <Route path="/parent/children/:childId/settings" element={<ChildSettingsScreen />} />
       <Route path="/parent/rules" element={<RulesScreen />} />
+      <Route path="/parent/rules/history" element={<PenaltyHistoryScreen />} />
       <Route path="/parent/analytics" element={<AnalyticsScreen />} />
       <Route path="/parent/settings" element={<SettingsScreen />} />
+      <Route path="/parent/expenses" element={<ExpensesReview />} />
 
       {/* Child */}
       <Route path="/child" element={<ChildDashboard />} />
@@ -49,6 +55,7 @@ function AppRoutes() {
       <Route path="/child/balance" element={<BalanceScreen />} />
       <Route path="/child/goals" element={<GoalsScreen />} />
       <Route path="/child/profile" element={<ProfileScreen />} />
+      <Route path="/child/expenses" element={<ExpensesScreen />} />
 
       <Route path="/" element={<Navigate to={user ? (user.role === 'PARENT' ? '/parent' : '/child') : '/welcome'} replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />

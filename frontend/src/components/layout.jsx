@@ -142,20 +142,25 @@ export function Layout({ children, title, noPadding = false, showBack = false, o
 
       <div className={`flex flex-col flex-1 ${hasNav ? 'lg:ml-72' : ''} min-h-screen relative z-10`}>
         {hasNav && (
-          <header className="lg:hidden flex items-center gap-4 px-6 h-20 bg-white/70 dark:bg-surface-container-high/80 backdrop-blur-xl border-b border-white/20 dark:border-white/5 sticky top-0 z-40">
-            {showBack && (
-              <button onClick={onBack} className="p-3 -ml-3 bg-white dark:bg-surface-container rounded-full shadow-clay active:scale-90 transition-transform">
-                <ChevronLeft size={24} className="text-primary" />
-              </button>
-            )}
-            <h1 className="flex-1 font-headline font-extrabold text-xl text-primary truncate tracking-tight text-left">
-              {title || 'PocketMoney'}
-            </h1>
-            
-            <div className="flex items-center gap-3">
-               {headerRight}
-               <ThemeToggle theme={theme} onToggle={toggleTheme} />
+          <header className="lg:hidden sticky top-0 z-40 bg-white/70 dark:bg-surface-container-high/80 backdrop-blur-xl border-b border-white/20 dark:border-white/5">
+            <div className="flex items-center gap-4 px-6 h-20">
+              {showBack && (
+                <button onClick={onBack} className="p-3 -ml-3 bg-white dark:bg-surface-container rounded-full shadow-clay active:scale-90 transition-transform flex-shrink-0">
+                  <ChevronLeft size={24} className="text-primary" />
+                </button>
+              )}
+              <h1 className="flex-1 min-w-0 font-headline font-extrabold text-xl text-primary truncate tracking-tight text-left">
+                {title || 'PocketMoney'}
+              </h1>
+              <div className="flex items-center gap-3 flex-shrink-0">
+                 <ThemeToggle theme={theme} onToggle={toggleTheme} />
+              </div>
             </div>
+            {headerRight && (
+              <div className="px-6 pb-4">
+                {headerRight}
+              </div>
+            )}
           </header>
         )}
         

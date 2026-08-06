@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams, Link } from 'react-router-dom';
 import {
   Users, User, ChevronRight, Eye, EyeOff, ArrowLeft,
-  Shield, Plus, Wallet, Sparkles, Zap, Trash2
+  Shield, Plus, Wallet, Sparkles, Zap, Trash2, Mail
 } from 'lucide-react';
 import { useApp } from '../context';
+import { authAPI } from '../api';
 import { Btn, Input, Card, Avatar } from '../components/ui';
 import { Layout } from '../components/layout';
 
@@ -38,8 +39,11 @@ export function Splash({ onFinish }) {
 
 // ── Welcome Screen ─────────────────────────────────────────────────────────
 export function Welcome() {
-  const { family, loginAsChild } = useApp();
+  const { family, cachedFamilyMembers } = useApp();
   const navigate = useNavigate();
+  // `family` is only populated after login (fetchAppData needs a user), so on this
+  // logged-out screen we fall back to the last family seen on this device.
+  const quickAccessChildren = (family?.users?.filter(u => u.role === 'CHILD')) || cachedFamilyMembers || [];
 
   return (
     <Layout noPadding>
@@ -59,19 +63,21 @@ export function Welcome() {
             <Btn full size="lg" className="h-16 text-lg shadow-clay-primary">Se connecter</Btn>
           </Link>
           
-          <div className="pt-8 space-y-3">
-             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant opacity-40">— Accès Rapide —</p>
-             <div className="grid grid-cols-2 gap-3">
-                {family?.users?.filter(u => u.role === 'CHILD').map(child => (
-                  <button key={child.id} onClick={() => { loginAsChild(child); navigate('/child'); }} className="group">
-                    <Card hover className="p-4 flex flex-col items-center gap-2 border-2 border-transparent hover:border-primary/20">
-                      <Avatar letter={child.avatar || child.name.charAt(0)} color={child.color} size="sm" />
-                      <span className="font-bold text-xs text-on-surface truncate w-full">{child.name}</span>
-                    </Card>
-                  </button>
-                ))}
-             </div>
-          </div>
+          {quickAccessChildren.length > 0 && (
+            <div className="pt-8 space-y-3">
+               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant opacity-40">— Accès Rapide —</p>
+               <div className="grid grid-cols-2 gap-3">
+                  {quickAccessChildren.map(child => (
+                    <button key={child.id} onClick={() => navigate('/login', { state: { prefillName: child.name } })} className="group">
+                      <Card hover className="p-4 flex flex-col items-center gap-2 border-2 border-transparent hover:border-primary/20">
+                        <Avatar letter={child.avatar || child.name.charAt(0)} color={child.color} size="sm" />
+                        <span className="font-bold text-xs text-on-surface truncate w-full">{child.name}</span>
+                      </Card>
+                    </button>
+                  ))}
+               </div>
+            </div>
+          )}
 
           <div className="pt-8 border-t border-on-surface/5 w-full text-center">
             <Link to="/signup" className="text-sm font-bold text-primary hover:underline">Créer une nouvelle famille</Link>
@@ -85,8 +91,9 @@ export function Welcome() {
 // ── Sign In Screen ─────────────────────────────────────────────────────────
 export function SignIn() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useApp();
-  const [form, setForm] = useState({ email: '', password: '' });
+  const [form, setForm] = useState({ email: location.state?.prefillName || '', password: '' });
   const [loading, setLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
 
@@ -140,6 +147,95 @@ export function SignIn() {
             }
           />
           <Btn type="submit" full loading={loading} size="lg" className="h-16 shadow-clay-primary text-lg mt-4">Me connecter</Btn>
+          <Link to="/forgot-password" className="block text-center text-sm font-bold text-primary hover:underline pt-2">Mot de passe oublié ?</Link>
+        </form>
+      </div>
+    </Layout>
+  );
+}
+
+// ── Forgot / Reset Password Screens ──────────────────────────────────────
+export function ForgotPassword() {
+  const navigate = useNavigate();
+  const { showToast } = useApp();
+  const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (loading) return;
+    setLoading(true);
+    try {
+      const res = await authAPI.forgotPassword(email);
+      setSent(true);
+      showToast(res.message);
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Layout title="Mot de passe oublié" showBack onBack={() => navigate('/login')}>
+      <div className="max-w-md mx-auto py-8 px-4">
+        {sent ? (
+          <div className="text-center space-y-4">
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-secondary-container/40 flex items-center justify-center text-secondary"><Mail size={32} /></div>
+            <h2 className="text-2xl font-headline font-black text-on-surface tracking-tight">Vérifie ta boîte mail</h2>
+            <p className="text-sm text-on-surface-variant">Si un compte existe avec cet email, un lien de réinitialisation vient d'être envoyé (valable 1 heure).</p>
+            <Btn variant="outline" full onClick={() => navigate('/login')}>Retour à la connexion</Btn>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <p className="text-sm text-on-surface-variant text-center">Entre ton email de parent, on t'enverra un lien pour choisir un nouveau mot de passe.</p>
+            <Input label="Email" type="email" placeholder="votre@email.com" value={email} onChange={e => setEmail(e.target.value)} required />
+            <Btn type="submit" full loading={loading} size="lg" className="h-16 shadow-clay-primary text-lg">Envoyer le lien</Btn>
+          </form>
+        )}
+      </div>
+    </Layout>
+  );
+}
+
+export function ResetPassword() {
+  const navigate = useNavigate();
+  const { showToast } = useApp();
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('token') || '';
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (loading) return;
+    if (password.length < 6) return showToast('6 caractères minimum.', 'error');
+    if (password !== confirm) return showToast('Les mots de passe ne correspondent pas.', 'error');
+    setLoading(true);
+    try {
+      await authAPI.resetPassword(token, password);
+      showToast('Mot de passe mis à jour, tu peux te connecter !');
+      navigate('/login');
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!token) {
+    return <Layout title="Lien invalide" showBack onBack={() => navigate('/login')}><div className="text-center py-20"><p className="font-bold text-on-surface-variant">Lien de réinitialisation manquant ou invalide.</p></div></Layout>;
+  }
+
+  return (
+    <Layout title="Nouveau mot de passe" showBack onBack={() => navigate('/login')}>
+      <div className="max-w-md mx-auto py-8 px-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <Input label="Nouveau mot de passe" type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required />
+          <Input label="Confirmer le mot de passe" type="password" placeholder="••••••••" value={confirm} onChange={e => setConfirm(e.target.value)} required />
+          <Btn type="submit" full loading={loading} size="lg" className="h-16 shadow-clay-primary text-lg">Définir le mot de passe</Btn>
         </form>
       </div>
     </Layout>

@@ -1,17 +1,35 @@
 services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pocketmoney
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-in-production}
+      POSTGRES_DB: pocketmoney
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pocketmoney"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   app:
     build: .
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "80:80"
     environment:
-      DATABASE_URL: file:/app/data/prod.db
+      # schema.prisma declares provider = "postgresql" — this must stay a
+      # postgresql:// URL, not a SQLite file: path (see QA_BUG_REPORT.md, ENV-1).
+      DATABASE_URL: postgresql://pocketmoney:${POSTGRES_PASSWORD:-change-me-in-production}@db:5432/pocketmoney
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       JWT_EXPIRES_IN: 7d
       PORT: 3001
       CLIENT_URL: http://localhost
-    volumes:
-      - db-data:/app/data
 
 volumes:
   db-data:
