@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useApp } from './context';
 
 // Import basic components
-import { Welcome, SignIn, SignUp, Splash } from './screens/auth.jsx';
+import { Welcome, SignIn, SignUp, Splash, ForgotPassword, ResetPassword } from './screens/auth.jsx';
 import { ParentDashboard, ChoresList, ChoreDetail, CreateChore, ChildrenView, RulesScreen, PenaltyHistoryScreen, AnalyticsScreen, SettingsScreen, ExpensesReview, ChildSettingsScreen } from './screens/parent.jsx';
 import { ChildDashboard, AvailableChores, SubmitChore, MyChores, BalanceScreen, GoalsScreen, ProfileScreen, ExpensesScreen } from './screens/child.jsx';
 
@@ -30,6 +30,8 @@ function AppRoutes() {
       <Route path="/welcome" element={<Welcome />} />
       <Route path="/login" element={<SignIn />} />
       <Route path="/signup" element={<SignUp />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       
       {/* Parent */}
       <Route path="/parent" element={<ParentDashboard />} />

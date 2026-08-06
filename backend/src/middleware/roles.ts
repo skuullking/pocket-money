@@ -1,5 +1,24 @@
 import { Request, Response, NextFunction } from 'express';
 
+export interface JwtPayload {
+  id: string;
+  role: 'PARENT' | 'CHILD';
+  familyId: string;
+  name: string;
+}
+
+// Ex-middleware/auth.ts (supprimé — server.ts fait sa propre authentification
+// inline et n'utilisait jamais ce fichier). Cette augmentation globale reste
+// nécessaire pour que `req.user` type-check ici et dans tout futur code qui
+// utiliserait le type `Request` d'Express plutôt que `any`.
+declare global {
+  namespace Express {
+    interface Request {
+      user: JwtPayload;
+    }
+  }
+}
+
 type Role = 'PARENT' | 'CHILD';
 
 export const requireRole =

@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
 import { createServer } from 'http';
+import crypto from 'crypto';
 import { initSocket, emitToFamily, emitToUser, SocketEvents } from './socket';
 
 dotenv.config();
@@ -30,6 +31,27 @@ app.get('/api/health', (req, res) => {
 // ── Helpers & Middlewares ──────────────────────────────────────────────────
 const generateToken = (userId: string) => {
   return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' });
+};
+
+// Envoi d'email : bascule automatiquement sur un fournisseur réel dès que
+// RESEND_API_KEY est configurée. Sans clé (ex. en dev local), le lien de
+// réinitialisation est simplement affiché dans les logs serveur — le flux
+// (génération/validation/expiration du token) reste testable de bout en
+// bout sans dépendance externe, seul le transport email change.
+const sendPasswordResetEmail = async (to: string, resetUrl: string) => {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.log(`[email non configuré] Lien de réinitialisation pour ${to} : ${resetUrl}`);
+    return;
+  }
+  const { Resend } = await import('resend');
+  const resend = new Resend(apiKey);
+  await resend.emails.send({
+    from: process.env.EMAIL_FROM || 'PocketMoney <onboarding@resend.dev>',
+    to,
+    subject: 'Réinitialise ton mot de passe PocketMoney',
+    html: `<p>Bonjour,</p><p>Clique sur ce lien pour choisir un nouveau mot de passe (valable 1 heure) :</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>Si tu n'es pas à l'origine de cette demande, ignore cet email.</p>`,
+  });
 };
 
 // Balance must never go below 0 (see backend/PLAN.md "Règle d'Or"). Deducts up to
@@ -210,6 +232,52 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/me', authenticateToken, (req: any, res) => {
   const u = req.user;
   res.json({ user: { id: u.id, name: u.name, role: u.role, familyId: u.familyId, balance: u.balance, monthDelta: u.monthDelta, saveBalance: u.saveBalance, spendBalance: u.spendBalance, giveBalance: u.giveBalance, avatar: u.avatar, color: u.color, age: u.age, settings: u.settings } });
+});
+
+// ── Récupération de mot de passe ─────────────────────────────────────────
+
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const { email } = req.body;
+  // Toujours 200 avec un message générique, que l'email existe ou non, pour
+  // ne pas permettre d'énumérer les comptes enregistrés.
+  const genericResponse = { message: 'Si un compte existe avec cet email, un lien de réinitialisation a été envoyé.' };
+  try {
+    const user = await prisma.user.findFirst({ where: { email, role: 'PARENT' } });
+    if (user) {
+      const rawToken = crypto.randomBytes(32).toString('hex');
+      const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1h
+      await prisma.passwordResetToken.create({ data: { userId: user.id, tokenHash, expiresAt } });
+      const resetUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/reset-password?token=${rawToken}`;
+      await sendPasswordResetEmail(user.email!, resetUrl);
+    }
+    res.json(genericResponse);
+  } catch (error: any) {
+    // Ne jamais révéler la cause exacte côté client — logguer seulement.
+    console.error('[forgot-password]', error);
+    res.json(genericResponse);
+  }
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+  const { token, newPassword } = req.body;
+  if (!token || !newPassword || String(newPassword).length < 6) {
+    return res.status(400).json({ error: 'Mot de passe invalide (6 caractères minimum)' });
+  }
+  try {
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const resetToken = await prisma.passwordResetToken.findFirst({
+      where: { tokenHash, used: false, expiresAt: { gt: new Date() } }
+    });
+    if (!resetToken) return res.status(400).json({ error: 'Lien invalide ou expiré' });
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: resetToken.userId }, data: { password: hashedPassword } }),
+      prisma.passwordResetToken.update({ where: { id: resetToken.id }, data: { used: true } }),
+    ]);
+    res.json({ message: 'Mot de passe mis à jour.' });
+  } catch (error: any) { res.status(400).json({ error: error.message }); }
 });
 
 // ── Family & Members ──────────────────────────────────────────────────────

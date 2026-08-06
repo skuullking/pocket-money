@@ -14,6 +14,7 @@ async function main() {
   await prisma.childSettings.deleteMany();
   await prisma.allowanceSchedule.deleteMany();
   await prisma.choreTemplate.deleteMany();
+  await prisma.passwordResetToken.deleteMany();
   await prisma.goal.deleteMany();
   await prisma.rule.deleteMany();
   await prisma.user.deleteMany();
