@@ -49,10 +49,13 @@ cd pocket-money
 ### 2. Backend setup
 
 ```bash
+# From the repo root: start a local Postgres (dev matches production's engine)
+docker compose -f docker-compose.dev.yml up -d
+
 cd backend
-cp .env.example .env       # fill in JWT_SECRET
+cp .env.example .env       # DATABASE_URL already points at the dev Postgres; set JWT_SECRET
 npm install
-npm run db:migrate         # create SQLite DB + run migrations
+npm run db:migrate         # run Postgres migrations
 npm run db:seed            # (optional) seed demo data
 npm run dev                # http://localhost:3001
 ```
@@ -99,12 +102,17 @@ Full request/response examples are in `backend/PocketMoney_Postman_Collection.js
 Copy `backend/.env.example` to `backend/.env`:
 
 ```env
-DATABASE_URL="file:./dev.db"
+DATABASE_URL="postgresql://pocketmoney:pocketmoney@localhost:5432/pocketmoney"
 JWT_SECRET="change-me-in-production"
 JWT_EXPIRES_IN="7d"
 PORT=3001
 CLIENT_URL="http://localhost:5173"
 ```
+
+> The project uses PostgreSQL in both development and production (`schema.prisma`
+> declares `provider = "postgresql"`). `docker-compose.dev.yml` provides a local
+> dev database; the full production stack is in `docker-compose.yml`. Do not point
+> `DATABASE_URL` at a SQLite `file:` path — the migrations are Postgres-only.
 
 ## License
 

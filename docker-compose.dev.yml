@@ -1,0 +1,33 @@
+# Local development database only.
+#
+# The backend runs on the host (`cd backend && npm run dev`) and talks to this
+# containerized Postgres over the exposed host port 5432. This keeps local dev
+# on the SAME engine as production (schema.prisma declares provider =
+# "postgresql"); do NOT point backend/.env at a SQLite file: path.
+#
+# Usage:
+#   docker compose -f docker-compose.dev.yml up -d
+#   cd backend && npm run db:migrate && npm run dev
+#
+# The full production stack lives in docker-compose.yml (which does NOT expose
+# the DB port to the host).
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pocketmoney
+      POSTGRES_PASSWORD: pocketmoney
+      POSTGRES_DB: pocketmoney
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - dev-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pocketmoney"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  dev-db-data:
