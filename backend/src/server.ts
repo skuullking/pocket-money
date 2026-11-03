@@ -13,7 +13,25 @@ dotenv.config();
 const app = express();
 const prisma = new PrismaClient();
 const port = process.env.PORT || 3001;
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
+// Un JWT_SECRET absent ne doit JAMAIS retomber sur une valeur publique : des
+// tokens signés avec un secret connu sont forgeables. En production on refuse
+// de démarrer ; en dev on tolère un secret explicitement non-sûr (mais .env en
+// fournit normalement un) avec un avertissement bruyant.
+const JWT_SECRET: string = (() => {
+  const secret = process.env.JWT_SECRET;
+  if (secret) return secret;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'JWT_SECRET is required in production. Refusing to start: a missing secret ' +
+      'would sign tokens with a public, forgeable value. Set JWT_SECRET in the environment.',
+    );
+  }
+  console.warn(
+    '[WARN] JWT_SECRET is not set — using an INSECURE development-only secret. ' +
+    'Set JWT_SECRET before running outside local development.',
+  );
+  return 'dev-only-insecure-secret';
+})();
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
