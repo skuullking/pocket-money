@@ -33,7 +33,21 @@ const JWT_SECRET: string = (() => {
   return 'dev-only-insecure-secret';
 })();
 
-app.use(cors());
+// Seule l'origine du front est autorisée, pour l'API comme pour Socket.io. Le
+// navigateur compare l'en-tête Origin (sans slash final) à cette valeur exacte.
+const CLIENT_ORIGIN: string = (() => {
+  const origin = process.env.CLIENT_URL?.replace(/\/+$/, '');
+  if (origin) return origin;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'CLIENT_URL is required in production. Refusing to start: CORS cannot be ' +
+      'restricted to the frontend origin without it. Set CLIENT_URL in the environment.',
+    );
+  }
+  return 'http://localhost:5173';
+})();
+
+app.use(cors({ origin: CLIENT_ORIGIN }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
@@ -987,7 +1001,7 @@ if (!process.env.VERCEL) {
   // bloc entier est déjà exclu du déploiement Vercel via ce même garde-fou,
   // donc le temps réel ne fonctionne que sur le déploiement Docker/self-hosted.
   const httpServer = createServer(app);
-  initSocket(httpServer);
+  initSocket(httpServer, CLIENT_ORIGIN);
   httpServer.listen(port, () => console.log(`🚀 API PocketMoney sur http://localhost:${port}`));
 }
 
