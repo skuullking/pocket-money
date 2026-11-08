@@ -1,5 +1,6 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-export const SOCKET_URL = API_BASE_URL.replace(/\/api\/?$/, '');
+// undefined (not '') when the API is same-origin: socket.io only falls back to the page origin on undefined.
+export const SOCKET_URL = API_BASE_URL.replace(/\/api\/?$/, '') || undefined;
 
 const fetchAPI = async (endpoint, options = {}) => {
   const token = localStorage.getItem('token');
