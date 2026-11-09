@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
 import { createServer } from 'http';
 import crypto from 'crypto';
+import rateLimit from 'express-rate-limit';
 import { initSocket, emitToFamily, emitToUser, SocketEvents } from './socket';
 import {
   allowanceSchema, applyRuleSchema, approveExpenseSchema, childSettingsSchema, createChoreSchema,
@@ -53,6 +54,16 @@ const CLIENT_ORIGIN: string = (() => {
   }
   return 'http://localhost:5173';
 })();
+
+// Nombre de proxys devant l'API. Sans cela, derrière nginx, tous les clients
+// partageraient l'IP du proxy et donc le même compteur de rate limiting. Une
+// valeur trop haute laisserait un client usurper son IP via X-Forwarded-For.
+const TRUST_PROXY_HOPS = (() => {
+  const hops = Number(process.env.TRUST_PROXY_HOPS ?? (process.env.NODE_ENV === 'production' ? 1 : 0));
+  if (!Number.isInteger(hops) || hops < 0) throw new Error('TRUST_PROXY_HOPS must be a non-negative integer.');
+  return hops;
+})();
+app.set('trust proxy', TRUST_PROXY_HOPS);
 
 app.use(cors({ origin: CLIENT_ORIGIN }));
 app.use(express.json({ limit: '10mb' }));
@@ -190,10 +201,28 @@ const authenticateToken = async (req: any, res: any, next: any) => {
   }
 };
 
+// Compteurs par IP, en mémoire : ils sont propres à chaque instance et repartent
+// de zéro au redémarrage. Suffisant pour un serveur unique ; plusieurs instances
+// (ou Vercel) demanderaient un store partagé.
+const authLimiter = (limit: number, windowMinutes: number, error: string, skipSuccessfulRequests = false) =>
+  rateLimit({
+    windowMs: windowMinutes * 60 * 1000,
+    limit,
+    skipSuccessfulRequests,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error },
+  });
+
+// Seuls les échecs comptent : une famille derrière la même IP peut se connecter librement.
+const loginLimiter = authLimiter(10, 15, 'Trop de tentatives de connexion. Réessaie dans 15 minutes.', true);
+const registerLimiter = authLimiter(10, 60, "Trop d'inscriptions depuis cette connexion. Réessaie plus tard.");
+const forgotPasswordLimiter = authLimiter(5, 60, 'Trop de demandes de réinitialisation. Réessaie plus tard.');
+
 // ── Auth Endpoints ────────────────────────────────────────────────────────
 
 // 1. Parent: Create Family + Initial Rules
-app.post('/api/auth/register/parent/create', async (req, res) => {
+app.post('/api/auth/register/parent/create', registerLimiter, async (req, res) => {
   const body = parseBody(registerParentCreateSchema, req, res);
   if (!body) return;
   const { name, email, password, familyName, rules } = body;
@@ -224,7 +253,7 @@ app.post('/api/auth/register/parent/create', async (req, res) => {
   }
 });
 
-app.post('/api/auth/register/parent/join', async (req, res) => {
+app.post('/api/auth/register/parent/join', registerLimiter, async (req, res) => {
   const body = parseBody(registerParentJoinSchema, req, res);
   if (!body) return;
   const { name, email, password, inviteCode } = body;
@@ -240,7 +269,7 @@ app.post('/api/auth/register/parent/join', async (req, res) => {
   } catch (error: any) { res.status(400).json({ error: error.message }); }
 });
 
-app.post('/api/auth/register/child', async (req, res) => {
+app.post('/api/auth/register/child', registerLimiter, async (req, res) => {
   const body = parseBody(registerChildSchema, req, res);
   if (!body) return;
   const { name, password, inviteCode, age } = body;
@@ -259,7 +288,7 @@ app.post('/api/auth/register/child', async (req, res) => {
   } catch (error: any) { res.status(400).json({ error: error.message }); }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
   const body = parseBody(loginSchema, req, res);
   if (!body) return;
   const { email, password } = body;
@@ -278,7 +307,7 @@ app.get('/api/auth/me', authenticateToken, (req: any, res) => {
 
 // ── Récupération de mot de passe ─────────────────────────────────────────
 
-app.post('/api/auth/forgot-password', async (req, res) => {
+app.post('/api/auth/forgot-password', forgotPasswordLimiter, async (req, res) => {
   const body = parseBody(forgotPasswordSchema, req, res);
   if (!body) return;
   const { email } = body;
