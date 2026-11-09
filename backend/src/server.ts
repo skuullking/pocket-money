@@ -14,7 +14,7 @@ import {
   allowanceSchema, applyRuleSchema, approveExpenseSchema, childSettingsSchema, createChoreSchema,
   createChoreTemplateSchema, createGoalSchema, createRuleSchema, deductExpenseSchema, deleteFamilySchema, forgotPasswordSchema,
   goalAmountSchema, loginSchema, parseBody, registerChildSchema, registerParentCreateSchema,
-  registerParentJoinSchema, rejectChoreSchema, rejectExpenseSchema, requestExpenseSchema, resetPasswordSchema,
+  registerParentJoinSchema, rejectChoreSchema, rejectExpenseSchema, requestExpenseSchema, resetChildPasswordSchema, resetPasswordSchema,
   splitSettingsSchema, submitChoreSchema, updateChoreSchema, updateChoreTemplateSchema, updateRuleSchema,
 } from './validation';
 
@@ -521,6 +521,21 @@ app.delete('/api/children/:id', authenticateToken, async (req: any, res) => {
     emitToUser(childId, SocketEvents.ACCOUNT_DELETED, {});
     disconnectUser(childId);
     emitToFamily(req.user.familyId, SocketEvents.MEMBER_REMOVED, { childId });
+    res.json({ success: true });
+  } catch (error: any) { res.status(400).json({ error: error.message }); }
+});
+
+// Les enfants n'ont pas d'email : c'est un parent de la famille qui rétablit l'accès.
+app.put('/api/children/:id/password', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'PARENT') return res.status(403).json({ error: 'Interdit' });
+  const body = parseBody(resetChildPasswordSchema, req, res);
+  if (!body) return;
+  try {
+    if (!(await isFamilyChild(req.params.id, req.user.familyId))) {
+      return res.status(404).json({ error: 'Enfant introuvable' });
+    }
+    const password = await bcrypt.hash(body.newPassword, 10);
+    await prisma.user.update({ where: { id: req.params.id }, data: { password } });
     res.json({ success: true });
   } catch (error: any) { res.status(400).json({ error: error.message }); }
 });

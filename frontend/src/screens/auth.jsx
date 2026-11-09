@@ -205,7 +205,7 @@ export function ForgotPassword() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
-            <p className="text-sm text-on-surface-variant text-center">Entre ton email de parent, on t'enverra un lien pour choisir un nouveau mot de passe.</p>
+            <p className="text-sm text-on-surface-variant text-center">Entre ton email de parent, on t'enverra un lien pour choisir un nouveau mot de passe. Enfant ? Demande à ton parent de le changer dans tes réglages.</p>
             <Input label="Email" type="email" placeholder="votre@email.com" value={email} onChange={e => setEmail(e.target.value)} required />
             <Btn type="submit" full loading={loading} size="lg" className="h-16 shadow-clay-primary text-lg">Envoyer le lien</Btn>
           </form>

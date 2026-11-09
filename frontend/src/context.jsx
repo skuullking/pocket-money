@@ -257,6 +257,16 @@ export function AppProvider({ children }) {
     }
   };
 
+  const resetChildPassword = async (childId, newPassword) => {
+    try {
+      await familyAPI.resetChildPassword(childId, newPassword);
+      showToast('Mot de passe modifié.');
+    } catch (error) {
+      showToast(error.message, 'error');
+      throw error;
+    }
+  };
+
   const deleteFamily = async (password) => {
     try {
       await familyAPI.deleteFamily(password);
@@ -511,7 +521,7 @@ export function AppProvider({ children }) {
       triggerConfetti, addChore, approveChore, rejectChore, submitChore, editChore, deleteChore,
       fundGoal, withdrawFromGoal, requestExpense, approveExpense, rejectExpense,
       createRule, editRule, deleteRule, applyPenalty, updateChildSettings, updateAllowance, updateSplitSettings,
-      createChoreTemplate, updateChoreTemplate, deleteChoreTemplate, removeChild, deleteFamily,
+      createChoreTemplate, updateChoreTemplate, deleteChoreTemplate, removeChild, resetChildPassword, deleteFamily,
       toggleTheme: () => setTheme(t => t === 'dark' ? 'light' : 'dark')
     }}>
       {children}

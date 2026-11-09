@@ -56,6 +56,10 @@ export const familyAPI = {
   getFamily: () => fetchAPI('/family'),
   getChildren: () => fetchAPI('/family/children'),
   removeChild: (childId) => fetchAPI(`/children/${childId}`, { method: 'DELETE' }),
+  resetChildPassword: (childId, newPassword) => fetchAPI(`/children/${childId}/password`, {
+    method: 'PUT',
+    body: JSON.stringify({ newPassword }),
+  }),
   deleteFamily: (password) => fetchAPI('/family', {
     method: 'DELETE',
     body: JSON.stringify({ password }),

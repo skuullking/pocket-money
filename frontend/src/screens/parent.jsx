@@ -1141,7 +1141,7 @@ export function ExpensesReview() {
 export function ChildSettingsScreen() {
   const navigate = useNavigate();
   const { childId } = useParams();
-  const { family, loading, updateChildSettings, updateAllowance, updateSplitSettings, removeChild } = useApp();
+  const { family, loading, updateChildSettings, updateAllowance, updateSplitSettings, removeChild, resetChildPassword, showToast } = useApp();
   const child = (family?.users || []).find(u => u.id === childId);
   const [removeOpen, setRemoveOpen] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -1155,6 +1155,9 @@ export function ChildSettingsScreen() {
   const [allowanceForm, setAllowanceForm] = useState({ amount: '', frequency: 'WEEKLY', active: true });
   const [allowanceInitialized, setAllowanceInitialized] = useState(false);
   const [savingAllowance, setSavingAllowance] = useState(false);
+
+  const [passwordForm, setPasswordForm] = useState({ password: '', confirm: '' });
+  const [savingPassword, setSavingPassword] = useState(false);
 
   useEffect(() => {
     if (child?.settings && !initialized) {
@@ -1208,6 +1211,22 @@ export function ChildSettingsScreen() {
       await updateChildSettings(child.id, form);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    const { password, confirm } = passwordForm;
+    if (password.length < 6 || password.length > 72) return showToast('Le mot de passe doit contenir entre 6 et 72 caractères.', 'error');
+    if (password !== confirm) return showToast('Les mots de passe ne correspondent pas.', 'error');
+    setSavingPassword(true);
+    try {
+      await resetChildPassword(child.id, password);
+      setPasswordForm({ password: '', confirm: '' });
+    } catch (e) {
+      // Le toast affiche déjà l'erreur.
+    } finally {
+      setSavingPassword(false);
     }
   };
 
@@ -1345,6 +1364,18 @@ export function ChildSettingsScreen() {
             </button>
           </div>
           <Btn full icon={Save} loading={saving} onClick={handleSave}>Enregistrer</Btn>
+        </Card>
+
+        <Card className="p-8">
+          <form onSubmit={handleResetPassword} className="space-y-6">
+            <div>
+              <h3 className="font-headline font-black text-2xl tracking-tighter">Mot de passe</h3>
+              <p className="text-xs text-on-surface-variant font-body mt-1">{child.name} a oublié son mot de passe ? Choisis-en un nouveau et communique-le à ton enfant.</p>
+            </div>
+            <Input label="Nouveau mot de passe" type="password" autoComplete="new-password" value={passwordForm.password} onChange={e => setPasswordForm(f => ({ ...f, password: e.target.value }))} required />
+            <Input label="Confirmer le mot de passe" type="password" autoComplete="new-password" value={passwordForm.confirm} onChange={e => setPasswordForm(f => ({ ...f, confirm: e.target.value }))} required />
+            <Btn type="submit" full icon={Save} loading={savingPassword}>Changer le mot de passe</Btn>
+          </form>
         </Card>
 
         <Card className="p-8">
