@@ -374,3 +374,19 @@ DATABASE_URL="postgresql://postgres@127.0.0.1:5433/pocketmoney_qa"
 Pour du développement durable, préférer un vrai rôle/mot de passe (ou
 `docker compose up db`, maintenant que le service Postgres a été ajouté —
 voir ENV-1) plutôt que ce cluster jetable en mode `trust`.
+
+---
+
+## Anomalies détectées par les tests automatisés (9 novembre 2026)
+
+**Statut : toutes corrigées.** Chacune est couverte par un test de non-régression
+portant son identifiant dans `backend/tests/`.
+
+| ID | Sévérité | Anomalie | Route | Correctif |
+|----|----------|----------|-------|-----------|
+| MONEY-5 | 🔴 Critique | Un parent peut débiter, sanctionner ou traiter les dépenses des enfants d'une **autre famille** : ni l'enfant, ni la règle, ni la dépense ne sont rattachés à la famille de l'appelant. | `POST /api/rules/:id/apply`, `POST /api/expenses/deduct`, `PUT /api/expenses/:id/approve`, `PUT /api/expenses/:id/reject` | Enfant, règle et dépense doivent appartenir à la famille de l'appelant, sinon `404`. |
+| MONEY-6 | 🔴 Critique | Le statut d'une dépense n'est pas vérifié : approuver deux fois débite deux fois, une dépense refusée reste approuvable, une dépense approuvée reste refusable (sans remboursement). | `PUT /api/expenses/:id/approve`, `/reject` | Passage atomique depuis `PENDING`, sinon `409`. |
+| MONEY-7 | 🟠 Élevée | Après l'achat d'un objectif, l'enfant peut retirer l'argent déjà dépensé (argent créé) ou continuer à l'alimenter (argent perdu). Le bouton « Retirer » reste actif dans l'interface. | `POST /api/goals/:id/withdraw`, `/fund` | `fund` et `withdraw` refusent un objectif acheté (`400`) ; boutons désactivés. |
+| MONEY-8 | 🟠 Élevée | Le solde est lu puis réécrit sans verrou. Des requêtes simultanées font passer le solde sous 0 (`fund`), rendent plusieurs fois la même épargne (`withdraw`) ou perdent des débits (`clampedDeduct`). | `fund`, `withdraw`, `clampedDeduct` | Écritures conditionnelles et verrous de ligne dans des transactions. |
+| MONEY-10 | 🟡 Moyenne | La limite hebdomadaire ne compte que les dépenses déjà approuvées : plusieurs demandes en attente la contournent, et l'approbation ne la revérifie pas. | `POST /api/expenses/request` | Les demandes en attente comptent dans la limite ; contrôle sous verrou. L'approbation reste à la main du parent. |
+| MONEY-9 | ⚪ Mineure | Une règle désactivée reste applicable par l'API (l'interface la masque). | `POST /api/rules/:id/apply` | Une règle désactivée répond `400`. |
