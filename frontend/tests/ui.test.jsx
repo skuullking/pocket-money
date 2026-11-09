@@ -137,8 +137,8 @@ describe('Modal', () => {
 
 describe('Toast', () => {
   it("n'affiche rien sans message", () => {
-    const { container } = render(<Toast toast={null} />);
-    expect(container).toBeEmptyDOMElement();
+    render(<Toast toast={null} />);
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
   });
 
   it.each([

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Home, ListChecks, Users, BarChart2, Settings,
@@ -30,7 +30,7 @@ function BottomNav({ role }) {
   const items = role === 'PARENT' ? PARENT_NAV : CHILD_NAV;
 
   return (
-    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 flex justify-around items-center
+    <nav aria-label="Navigation principale" className="lg:hidden fixed bottom-0 left-0 right-0 z-50 flex justify-around items-center
       px-4 pb-safe pt-3 bg-white/80 dark:bg-surface-container-high/90 backdrop-blur-xl rounded-t-[2.5rem]
       shadow-[0_-10px_40px_rgba(0,0,0,0.05)] border-t border-white/20 dark:border-white/5">
       {items.map(({ id, path, label, Icon }) => {
@@ -38,14 +38,15 @@ function BottomNav({ role }) {
         return (
           <button
             key={id}
+            aria-current={active ? 'page' : undefined}
             onClick={() => navigate(path)}
             className={`flex flex-col items-center justify-center gap-1 min-h-[64px] min-w-[64px] px-2 py-1 rounded-3xl transition-all duration-300
               ${active 
                 ? 'bg-primary text-on-primary scale-110 shadow-clay-primary' 
-                : 'text-on-surface-variant/60 hover:bg-primary/5 active:scale-90'}`}
+                : 'text-on-surface-variant hover:bg-primary/5 active:scale-90'}`}
           >
             <Icon size={20} strokeWidth={active ? 2.5 : 2} />
-            <span className={`text-[10px] font-bold uppercase tracking-tighter ${active ? 'opacity-100' : 'opacity-70'}`}>{label}</span>
+            <span className={`text-[10px] font-bold uppercase tracking-tighter`}>{label}</span>
           </button>
         );
       })}
@@ -78,17 +79,18 @@ function Sidebar({ role }) {
         </div>
       </div>
 
-      <nav className="flex-1 px-4 space-y-2 overflow-y-auto custom-scrollbar">
+      <nav aria-label="Navigation principale" className="flex-1 px-4 space-y-2 overflow-y-auto custom-scrollbar">
         {items.map(({ id, path, label, Icon }) => {
           const active = location.pathname === path;
           return (
             <button
               key={id}
+              aria-current={active ? 'page' : undefined}
               onClick={() => navigate(path)}
               className={`w-full flex items-center gap-4 px-6 py-4 rounded-[1.5rem] transition-all duration-300 text-left group
                 ${active 
                   ? 'bg-primary text-on-primary font-bold shadow-clay-primary translate-x-2' 
-                  : 'text-on-surface-variant/70 hover:bg-primary/10 hover:text-primary'}`}
+                  : 'text-on-surface-variant hover:bg-primary/10 hover:text-primary'}`}
             >
               <Icon size={22} strokeWidth={active ? 2.5 : 2} className={active ? '' : 'group-hover:scale-110 transition-transform'} />
               <span className="font-headline text-base tracking-tight">{label}</span>
@@ -111,7 +113,7 @@ function Sidebar({ role }) {
           />
           <div className="min-w-0">
             <p className="text-sm font-extrabold font-headline text-on-surface truncate">{user?.name}</p>
-            <p className="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest opacity-60">Ma Famille</p>
+            <p className="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest">Ma Famille</p>
           </div>
         </div>
       </div>
@@ -123,8 +125,16 @@ export function Layout({ children, title, noPadding = false, showBack = false, o
   const { user, theme, toggleTheme, toast } = useApp();
   const hasNav = !!user;
 
+  useEffect(() => {
+    document.title = title ? `${title} · PocketMoney` : 'PocketMoney';
+  }, [title]);
+
   return (
     <div className="min-h-screen bg-background dark:bg-surface text-on-surface relative transition-colors duration-500 overflow-x-hidden">
+      <a href="#contenu" className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[400] focus:px-6 focus:py-3 focus:rounded-full focus:bg-primary focus:text-on-primary focus:font-bold">
+        Aller au contenu
+      </a>
+
       {/* Floating background decorations */}
       <div className="fixed inset-0 pointer-events-none opacity-30 dark:opacity-10 overflow-hidden">
         <div className="absolute -top-[10%] -right-[5%] w-[40%] h-[40%] rounded-full bg-primary/20 blur-[120px]" />
@@ -145,7 +155,7 @@ export function Layout({ children, title, noPadding = false, showBack = false, o
           <header className="lg:hidden sticky top-0 z-40 bg-white/70 dark:bg-surface-container-high/80 backdrop-blur-xl border-b border-white/20 dark:border-white/5">
             <div className="flex items-center gap-4 px-6 h-20">
               {showBack && (
-                <button onClick={onBack} className="p-3 -ml-3 bg-white dark:bg-surface-container rounded-full shadow-clay active:scale-90 transition-transform flex-shrink-0">
+                <button onClick={onBack} aria-label="Retour" className="p-3 -ml-3 bg-white dark:bg-surface-container rounded-full shadow-clay active:scale-90 transition-transform flex-shrink-0">
                   <ChevronLeft size={24} className="text-primary" />
                 </button>
               )}
@@ -164,7 +174,7 @@ export function Layout({ children, title, noPadding = false, showBack = false, o
           </header>
         )}
         
-        <main className={`flex-1 flex flex-col ${noPadding ? '' : 'px-6 py-8 lg:px-12 lg:py-12'} ${hasNav ? '' : 'justify-center min-h-screen pt-20'} pb-32 lg:pb-12`}>
+        <main id="contenu" tabIndex={-1} className={`flex-1 flex flex-col ${noPadding ? '' : 'px-6 py-8 lg:px-12 lg:py-12'} ${hasNav ? '' : 'justify-center min-h-screen pt-20'} pb-32 lg:pb-12`}>
           {hasNav && title && (
             <div className="hidden lg:flex items-center justify-between mb-10">
               <h1 className="text-4xl font-extrabold font-headline text-primary tracking-tighter">{title}</h1>

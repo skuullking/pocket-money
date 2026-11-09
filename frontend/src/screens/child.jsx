@@ -54,7 +54,7 @@ export function ChildDashboard() {
           <div className="absolute top-0 right-0 w-80 h-80 rounded-full bg-white/20 -translate-y-32 translate-x-32 blur-3xl" />
           <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-8">
             <div className="text-center sm:text-left text-white">
-              <p className="text-white/70 text-sm font-black uppercase tracking-[0.2em] mb-2">Mon Trésor</p>
+              <p className="text-white text-sm font-black uppercase tracking-[0.2em] mb-2">Mon Trésor</p>
               <p className="font-mono-num font-black text-7xl tracking-tighter leading-none">
                 €{animBalance.toFixed(2)}
               </p>
@@ -130,7 +130,7 @@ export function ChildDashboard() {
             )}
 
             <div className="space-y-6">
-              <h3 className="font-headline font-black text-2xl text-on-surface tracking-tighter px-2 opacity-70">Activités</h3>
+              <h3 className="font-headline font-black text-2xl text-on-surface tracking-tighter px-2">Activités</h3>
               <div className="bg-white/40 dark:bg-white/5 rounded-[2.5rem] p-2 space-y-1">
                 {myTrans.map(t => (
                   <div key={t.id} className="flex items-center gap-4 p-4 rounded-3xl hover:bg-white/60 dark:hover:bg-white/10 transition-colors group">
@@ -175,10 +175,10 @@ export function AvailableChores() {
                    </div>
                    <div>
                       <h4 className="font-headline font-black text-2xl text-on-surface tracking-tighter leading-tight mb-2">{chore.title}</h4>
-                      <p className="text-on-surface-variant font-medium text-sm line-clamp-3 opacity-80 leading-relaxed">{chore.description}</p>
+                      <p className="text-on-surface-variant font-medium text-sm line-clamp-3 leading-relaxed">{chore.description}</p>
                    </div>
                    <div className="mt-auto flex items-center justify-between pt-6 border-t border-black/5 dark:border-white/5">
-                      <div className="flex items-center gap-2 text-xs font-black text-on-surface-variant uppercase tracking-widest opacity-60">
+                      <div className="flex items-center gap-2 text-xs font-black text-on-surface-variant uppercase tracking-widest">
                          <Clock size={16} /> {chore.deadline}
                       </div>
                       <span className={`font-mono-num font-black text-xl px-4 py-2 rounded-2xl shadow-clay ${pal.rewardBg} ${pal.rewardText}`}>+€{chore.reward}</span>
@@ -261,11 +261,11 @@ const handleSubmit = async () => {
             {photo ? (
               <div className="relative rounded-[2rem] overflow-hidden shadow-2xl group border-4 border-white dark:border-surface-container-highest">
                 <img src={photo} alt="Ma réussite" className="w-full h-80 object-cover" />
-                <button onClick={() => setPhoto(null)} className="absolute top-5 right-5 p-4 bg-error text-white rounded-full shadow-2xl active:scale-90 transition-transform"><X size={24} strokeWidth={3} /></button>
+                <button onClick={() => setPhoto(null)} aria-label="Retirer la photo" className="absolute top-5 right-5 p-4 bg-error text-on-error rounded-full shadow-2xl active:scale-90 transition-transform"><X size={24} strokeWidth={3} /></button>
               </div>
             ) : (
               <button onClick={() => fileRef.current?.click()} className="w-full border-4 border-dashed border-on-surface/5 rounded-[2.5rem] py-20 flex flex-col items-center justify-center gap-6 hover:bg-primary/5 hover:border-primary/20 transition-all group">
-                <div className="w-20 h-20 rounded-full bg-surface-variant flex items-center justify-center text-on-surface-variant group-hover:scale-110 group-hover:bg-primary group-hover:text-white transition-all shadow-inner"><Camera size={40} /></div>
+                <div className="w-20 h-20 rounded-full bg-surface-variant flex items-center justify-center text-on-surface-variant group-hover:scale-110 group-hover:bg-primary group-hover:text-on-primary transition-all shadow-inner"><Camera size={40} /></div>
                 <div className="text-center space-y-1">
                   <p className="font-headline font-black text-xl text-on-surface">Prendre une photo</p>
                 </div>
@@ -321,8 +321,8 @@ export function BalanceScreen() {
   return (
     <Layout title="Mon Trésor" showBack onBack={() => navigate('/child')}>
       <div className="max-w-2xl mx-auto space-y-10 pb-20">
-        <div className="bg-primary rounded-[3rem] p-12 text-white text-center shadow-clay-primary border-t-8 border-white/20 relative overflow-hidden">
-          <p className="text-white/60 text-xs font-black uppercase tracking-[0.3em] mb-4">Total accumulé</p>
+        <div className="bg-primary rounded-[3rem] p-12 text-on-primary text-center shadow-clay-primary border-t-8 border-white/20 relative overflow-hidden">
+          <p className="text-on-primary text-xs font-black uppercase tracking-[0.3em] mb-4">Total accumulé</p>
           <p className="text-7xl font-mono-num font-black tracking-tighter">€{user.balance?.toFixed(2)}</p>
         </div>
 
@@ -344,7 +344,7 @@ export function BalanceScreen() {
         )}
 
         <div className="space-y-6">
-          <h3 className="font-headline font-black text-2xl text-on-surface tracking-tighter px-2 opacity-70 text-center">Historique des pièces</h3>
+          <h3 className="font-headline font-black text-2xl text-on-surface tracking-tighter px-2 text-center">Historique des pièces</h3>
           <div className="space-y-3">
             {myTrans.map(t => (
               <div key={t.id} className="flex items-center gap-5 p-6 bg-white dark:bg-surface-container-high rounded-[2rem] shadow-clay border border-on-surface/5 group hover:scale-[1.02] transition-transform">
@@ -383,13 +383,13 @@ export function GoalsScreen() {
                   <div className="w-20 h-20 rounded-[1.5rem] bg-secondary-container flex items-center justify-center text-secondary text-4xl shadow-inner animate-float">{goal.icon}</div>
                   <div className="flex-1">
                     <h4 className="font-headline font-black text-2xl text-on-surface tracking-tighter leading-tight">{goal.title}</h4>
-                    <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest opacity-60 mt-1">{goal.isShared ? 'Objectif Partagé' : 'Objectif Personnel'}</p>
+                    <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mt-1">{goal.isShared ? 'Objectif Partagé' : 'Objectif Personnel'}</p>
                   </div>
                 </div>
                 <div className="space-y-3">
                    <div className="flex justify-between items-end">
                       <p className="text-xs font-black text-primary uppercase tracking-widest">Épargne</p>
-                      <p className="font-mono-num font-black text-2xl text-on-surface">€{goal.current} <span className="text-on-surface-variant text-sm font-medium opacity-40">/ €{goal.target}</span></p>
+                      <p className="font-mono-num font-black text-2xl text-on-surface">€{goal.current} <span className="text-on-surface-variant text-sm font-medium">/ €{goal.target}</span></p>
                    </div>
                    <ProgressBar value={goal.current} max={goal.target} color="success" height="lg" />
                 </div>

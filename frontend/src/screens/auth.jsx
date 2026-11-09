@@ -31,7 +31,7 @@ export function Splash({ onFinish }) {
       </div>
       <div className="mt-10 text-center animate-fade-in z-10">
         <h1 className="font-headline font-extrabold text-4xl tracking-tighter mb-2">PocketMoney</h1>
-        <p className="text-white/70 font-body text-base font-medium">L'argent de poche simplifié</p>
+        <p className="text-on-primary font-body text-base font-medium">L'argent de poche simplifié</p>
       </div>
     </div>
   );
@@ -54,7 +54,7 @@ export function Welcome() {
         <h1 className="text-5xl font-headline font-black text-on-surface mb-4 tracking-tighter">
           Pocket<span className="text-primary">Money</span>
         </h1>
-        <p className="text-on-surface-variant text-lg font-medium mb-12 max-w-sm leading-relaxed opacity-80">
+        <p className="text-on-surface-variant text-lg font-medium mb-12 max-w-sm leading-relaxed">
           Gérez l'argent de poche en famille simplement.
         </p>
 
@@ -65,7 +65,7 @@ export function Welcome() {
           
           {quickAccessChildren.length > 0 && (
             <div className="pt-8 space-y-3">
-               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant opacity-40">— Accès Rapide —</p>
+               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant">— Accès Rapide —</p>
                <div className="grid grid-cols-2 gap-3">
                   {quickAccessChildren.map(child => (
                     <button key={child.id} onClick={() => navigate('/login', { state: { prefillName: child.name, prefillInviteCode: child.inviteCode || family?.inviteCode } })} className="group">
@@ -157,7 +157,7 @@ export function SignIn() {
             required
             autoComplete="current-password"
             suffix={
-              <button type="button" onClick={() => setShowPw(!showPw)} className="text-on-surface-variant p-2">
+              <button type="button" onClick={() => setShowPw(!showPw)} aria-label={showPw ? 'Masquer le mot de passe' : 'Afficher le mot de passe'} aria-pressed={showPw} className="text-on-surface-variant p-2">
                 {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             }
@@ -320,7 +320,7 @@ export function SignUp() {
               </div>
               <div className="flex-1">
                 <p className="font-extrabold text-on-surface text-lg tracking-tight">Parent : Créer une famille</p>
-                <p className="text-xs text-on-surface-variant opacity-70">Démarrez votre gestion.</p>
+                <p className="text-xs text-on-surface-variant">Démarrez votre gestion.</p>
               </div>
               <ChevronRight size={24} className="text-outline-variant" />
             </Card>
@@ -371,7 +371,8 @@ export function SignUp() {
               <div key={index} className="flex gap-3 items-end animate-fade-in">
                 <div className="flex-1">
                   <Input 
-                    label={index === 0 ? "Motif de l'amende" : ""} 
+                    label={index === 0 ? "Motif de l'amende" : ""}
+                    aria-label={index === 0 ? undefined : "Motif de l'amende"} 
                     placeholder="ex: Chambre en désordre" 
                     value={rule.title} 
                     onChange={(e) => handleRuleChange(index, 'title', e.target.value)}
@@ -379,7 +380,8 @@ export function SignUp() {
                 </div>
                 <div className="w-24">
                   <Input 
-                    label={index === 0 ? "Prix (€)" : ""} 
+                    label={index === 0 ? "Prix (€)" : ""}
+                    aria-label={index === 0 ? undefined : "Prix (€)"} 
                     type="number" 
                     placeholder="2" 
                     value={rule.amount} 
@@ -387,6 +389,8 @@ export function SignUp() {
                   />
                 </div>
                 <button 
+                  type="button"
+                  aria-label={`Retirer la règle ${index + 1}`}
                   onClick={() => handleRemoveRule(index)}
                   className="p-4 text-error hover:bg-error/10 rounded-xl transition-colors mb-1"
                 >
