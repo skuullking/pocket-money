@@ -268,7 +268,7 @@ export function Modal({ open, onClose, title, children, footer }) {
   // Le focus entre dans la fenêtre, y reste, puis revient sur le bouton d'origine.
   useEffect(() => {
     if (!open) return undefined;
-    const previous = document.activeElement;
+    const previous = /** @type {HTMLElement | null} */ (document.activeElement);
     dialogRef.current?.focus();
     const onKeyDown = (e) => {
       if (e.key === 'Escape') onCloseRef.current?.();
