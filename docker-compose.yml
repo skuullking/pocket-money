@@ -4,7 +4,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: pocketmoney
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-in-production}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant, voir .env.production.example}
       POSTGRES_DB: pocketmoney
     volumes:
       - db-data:/var/lib/postgresql/data
@@ -25,11 +25,11 @@ services:
     environment:
       # schema.prisma declares provider = "postgresql" — this must stay a
       # postgresql:// URL, not a SQLite file: path (see QA_BUG_REPORT.md, ENV-1).
-      DATABASE_URL: postgresql://pocketmoney:${POSTGRES_PASSWORD:-change-me-in-production}@db:5432/pocketmoney
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      DATABASE_URL: postgresql://pocketmoney:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant}@db:5432/pocketmoney
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET manquant, voir .env.production.example}
       JWT_EXPIRES_IN: 7d
       PORT: 3001
-      CLIENT_URL: http://localhost
+      CLIENT_URL: ${CLIENT_URL:?CLIENT_URL manquant, voir .env.production.example}
       # nginx, dans ce conteneur, est le seul proxy devant l'API.
       TRUST_PROXY_HOPS: 1
 

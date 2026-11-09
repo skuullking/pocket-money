@@ -8,6 +8,7 @@ import {
   submitChoreSchema,
 } from '../src/validation';
 import { assertTestDatabase } from './support/testDatabase';
+import { assertStrongSecret } from '../src/config';
 
 describe('readAuthCookie', () => {
   it.each([
@@ -159,5 +160,15 @@ describe('configuration de démarrage', () => {
   it('refuse un fuseau horaire invalide', async () => {
     vi.stubEnv('APP_TIMEZONE', 'Mars/Olympus');
     await expect(importServer()).rejects.toThrow();
+  });
+});
+
+describe('assertStrongSecret', () => {
+  it.each(['change-me-in-production', 'your-super-secret-jwt-key-change-in-production', 'court'])('refuse %s', value => {
+    expect(() => assertStrongSecret('JWT_SECRET', value)).toThrow();
+  });
+
+  it('accepte un secret généré', () => {
+    expect(() => assertStrongSecret('JWT_SECRET', 'a1'.repeat(32))).not.toThrow();
   });
 });

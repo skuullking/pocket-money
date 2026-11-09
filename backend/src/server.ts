@@ -8,6 +8,7 @@ import { createServer } from 'http';
 import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
 import { AUTH_COOKIE, readAuthCookie } from './authCookie';
+import { assertStrongSecret } from './config';
 import { initSocket, emitToFamily, emitToUser, disconnectFamily, disconnectUser, SocketEvents } from './socket';
 import {
   allowanceSchema, applyRuleSchema, approveExpenseSchema, childSettingsSchema, createChoreSchema,
@@ -28,7 +29,10 @@ const port = process.env.PORT || 3001;
 // fournit normalement un) avec un avertissement bruyant.
 const JWT_SECRET: string = (() => {
   const secret = process.env.JWT_SECRET;
-  if (secret) return secret;
+  if (secret) {
+    if (process.env.NODE_ENV === 'production') assertStrongSecret('JWT_SECRET', secret);
+    return secret;
+  }
   if (process.env.NODE_ENV === 'production') {
     throw new Error(
       'JWT_SECRET is required in production. Refusing to start: a missing secret ' +
