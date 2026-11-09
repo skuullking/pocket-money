@@ -30,6 +30,8 @@ services:
       JWT_EXPIRES_IN: 7d
       PORT: 3001
       CLIENT_URL: http://localhost
+      # nginx, dans ce conteneur, est le seul proxy devant l'API.
+      TRUST_PROXY_HOPS: 1
 
 volumes:
   db-data:
