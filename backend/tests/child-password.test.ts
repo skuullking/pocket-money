@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, it } from 'vitest';
 import { anonymous, as, createFamily, ORIGIN, PASSWORD, useCleanDatabase } from './support/helpers';
 
 useCleanDatabase();
@@ -7,8 +7,8 @@ const NEW_PASSWORD = 'nouveau-secret';
 const reset = (actor: { id: string }, childId: string, newPassword: unknown = NEW_PASSWORD) =>
   as(actor).put(`/api/children/${childId}/password`).set('Origin', ORIGIN).send({ newPassword });
 
-describe('réinitialisation du mot de passe enfant', () => {
-  it('le parent définit un mot de passe avec lequel l’enfant se connecte', async () => {
+describe('rÃ©initialisation du mot de passe enfant', () => {
+  it('le parent dÃ©finit un mot de passe avec lequel lâ€™enfant se connecte', async () => {
     const { parent, child, family } = await createFamily();
     await reset(parent, child.id).expect(200);
 
@@ -23,7 +23,7 @@ describe('réinitialisation du mot de passe enfant', () => {
     await reset(child, child.id).expect(403);
   });
 
-  it('un parent ne peut pas viser l’enfant d’une autre famille', async () => {
+  it('un parent ne peut pas viser lâ€™enfant dâ€™une autre famille', async () => {
     const { parent } = await createFamily('Dupont');
     const { child: other } = await createFamily('Martin');
     await reset(parent, other.id).expect(404);
