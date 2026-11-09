@@ -7,6 +7,13 @@ import { PrismaClient } from '@prisma/client';
 import { createServer } from 'http';
 import crypto from 'crypto';
 import { initSocket, emitToFamily, emitToUser, SocketEvents } from './socket';
+import {
+  allowanceSchema, applyRuleSchema, approveExpenseSchema, childSettingsSchema, createChoreSchema,
+  createChoreTemplateSchema, createGoalSchema, createRuleSchema, deductExpenseSchema, forgotPasswordSchema,
+  goalAmountSchema, loginSchema, parseBody, registerChildSchema, registerParentCreateSchema,
+  registerParentJoinSchema, rejectChoreSchema, rejectExpenseSchema, requestExpenseSchema, resetPasswordSchema,
+  splitSettingsSchema, submitChoreSchema, updateChoreSchema, updateChoreTemplateSchema, updateRuleSchema,
+} from './validation';
 
 dotenv.config();
 
@@ -187,19 +194,16 @@ const authenticateToken = async (req: any, res: any, next: any) => {
 
 // 1. Parent: Create Family + Initial Rules
 app.post('/api/auth/register/parent/create', async (req, res) => {
-  const { name, email, password, familyName, rules } = req.body;
+  const body = parseBody(registerParentCreateSchema, req, res);
+  if (!body) return;
+  const { name, email, password, familyName, rules } = body;
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     const family = await prisma.family.create({
       data: {
         name: familyName,
         inviteCode: Math.random().toString(36).substring(2, 8).toUpperCase(),
-        rules: {
-          create: (rules || []).map((r: any) => ({
-            title: r.title,
-            amount: Math.max(0, parseFloat(r.amount) || 0),
-          }))
-        }
+        rules: { create: rules ?? [] }
       }
     });
 
@@ -221,7 +225,9 @@ app.post('/api/auth/register/parent/create', async (req, res) => {
 });
 
 app.post('/api/auth/register/parent/join', async (req, res) => {
-  const { name, email, password, inviteCode } = req.body;
+  const body = parseBody(registerParentJoinSchema, req, res);
+  if (!body) return;
+  const { name, email, password, inviteCode } = body;
   try {
     const family = await prisma.family.findUnique({ where: { inviteCode } });
     if (!family) return res.status(404).json({ error: 'Code invalide' });
@@ -235,7 +241,9 @@ app.post('/api/auth/register/parent/join', async (req, res) => {
 });
 
 app.post('/api/auth/register/child', async (req, res) => {
-  const { name, password, inviteCode, age } = req.body;
+  const body = parseBody(registerChildSchema, req, res);
+  if (!body) return;
+  const { name, password, inviteCode, age } = body;
   try {
     const family = await prisma.family.findUnique({ where: { inviteCode } });
     if (!family) return res.status(404).json({ error: 'Code invalide' });
@@ -243,7 +251,7 @@ app.post('/api/auth/register/child', async (req, res) => {
     const user = await prisma.user.create({
       data: {
         name, password: hashedPassword, role: 'CHILD', familyId: family.id,
-        age: parseInt(age), avatar: name.charAt(0).toUpperCase(), color: '#835500'
+        age, avatar: name.charAt(0).toUpperCase(), color: '#835500'
       }
     });
     const token = generateToken(user.id);
@@ -252,7 +260,9 @@ app.post('/api/auth/register/child', async (req, res) => {
 });
 
 app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body;
+  const body = parseBody(loginSchema, req, res);
+  if (!body) return;
+  const { email, password } = body;
   try {
     const user = await prisma.user.findFirst({ where: { OR: [{ email: email }, { name: email }] } });
     if (!user || !(await bcrypt.compare(password, user.password))) return res.status(401).json({ error: 'Identifiants invalides' });
@@ -269,7 +279,9 @@ app.get('/api/auth/me', authenticateToken, (req: any, res) => {
 // ── Récupération de mot de passe ─────────────────────────────────────────
 
 app.post('/api/auth/forgot-password', async (req, res) => {
-  const { email } = req.body;
+  const body = parseBody(forgotPasswordSchema, req, res);
+  if (!body) return;
+  const { email } = body;
   // Toujours 200 avec un message générique, que l'email existe ou non, pour
   // ne pas permettre d'énumérer les comptes enregistrés.
   const genericResponse = { message: 'Si un compte existe avec cet email, un lien de réinitialisation a été envoyé.' };
@@ -292,10 +304,9 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 });
 
 app.post('/api/auth/reset-password', async (req, res) => {
-  const { token, newPassword } = req.body;
-  if (!token || !newPassword || String(newPassword).length < 6) {
-    return res.status(400).json({ error: 'Mot de passe invalide (6 caractères minimum)' });
-  }
+  const body = parseBody(resetPasswordSchema, req, res);
+  if (!body) return;
+  const { token, newPassword } = body;
   try {
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const resetToken = await prisma.passwordResetToken.findFirst({
@@ -337,11 +348,12 @@ app.get('/api/rules', authenticateToken, async (req: any, res) => {
 
 app.post('/api/rules', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'PARENT') return res.status(403).json({ error: 'Interdit' });
-  const { title, description, amount, active } = req.body;
-  if (!title || !String(title).trim()) return res.status(400).json({ error: 'Le motif est requis' });
+  const body = parseBody(createRuleSchema, req, res);
+  if (!body) return;
+  const { title, description, amount, active } = body;
   try {
     const rule = await prisma.rule.create({
-      data: { title, description, amount: Math.max(0, parseFloat(amount) || 0), active: active !== false, familyId: req.user.familyId }
+      data: { title, description, amount, active: active !== false, familyId: req.user.familyId }
     });
     res.status(201).json({ rule });
   } catch (error: any) { res.status(400).json({ error: error.message }); }
@@ -349,18 +361,20 @@ app.post('/api/rules', authenticateToken, async (req: any, res) => {
 
 app.put('/api/rules/:id', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'PARENT') return res.status(403).json({ error: 'Interdit' });
+  const body = parseBody(updateRuleSchema, req, res);
+  if (!body) return;
   try {
     const existing = await prisma.rule.findUnique({ where: { id: req.params.id } });
     if (!existing) return res.status(404).json({ error: 'Règle introuvable' });
     if (existing.familyId !== req.user.familyId) return res.status(403).json({ error: 'Interdit' });
-    const { title, description, amount, active } = req.body;
+    const { title, description, amount, active } = body;
     const rule = await prisma.rule.update({
       where: { id: req.params.id },
       data: {
         title: title ?? existing.title,
         description: description ?? existing.description,
-        amount: amount !== undefined ? Math.max(0, parseFloat(amount) || 0) : existing.amount,
-        active: active !== undefined ? !!active : existing.active,
+        amount: amount ?? existing.amount,
+        active: active ?? existing.active,
       }
     });
     res.json({ rule });
@@ -392,6 +406,27 @@ app.get('/api/family/penalty-history', authenticateToken, async (req: any, res) 
 
 // ── Chores CRUD ───────────────────────────────────────────────────────────
 
+// Une corvée n'a pas de familyId : elle appartient à la famille de son assigné.
+// `null` couvre aussi une corvée d'une autre famille, pour ne pas révéler son existence.
+const findFamilyChore = (id: string, familyId: string) =>
+  prisma.chore.findFirst({ where: { id, assignee: { familyId } } });
+
+// Le typeof est indispensable : Prisma ignore un filtre `undefined` et
+// interprète un objet ({ not: '' }) venu du body comme un opérateur.
+const isFamilyChild = async (userId: unknown, familyId: string) => {
+  if (typeof userId !== 'string') return false;
+  const child = await prisma.user.findFirst({ where: { id: userId, familyId, role: 'CHILD' }, select: { id: true } });
+  return child !== null;
+};
+
+// Le statut attendu est dans le `where` : de deux requêtes simultanées, une seule
+// modifie la ligne, ce qu'une lecture suivie d'un update ne garantirait pas.
+// `null` si la corvée n'est plus dans le statut attendu.
+const transitionChore = async (db: any, id: string, from: string, data: object) => {
+  const { count } = await db.chore.updateMany({ where: { id, status: from }, data });
+  return count === 1 ? db.chore.findUniqueOrThrow({ where: { id } }) : null;
+};
+
 app.get('/api/chores', authenticateToken, async (req: any, res) => {
   await generateDueChores(req.user.familyId).catch(err => console.error('[generateDueChores]', err));
   const chores = await prisma.chore.findMany({
@@ -413,18 +448,18 @@ app.get('/api/chore-templates', authenticateToken, async (req: any, res) => {
 
 app.post('/api/chore-templates', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'PARENT') return res.status(403).json({ error: 'Interdit' });
+  const body = parseBody(createChoreTemplateSchema, req, res);
+  if (!body) return;
   try {
-    const { title, description, reward, assigneeId, frequency, weekday } = req.body;
-    if (!title || !assigneeId) return res.status(400).json({ error: 'Titre et enfant requis' });
-    if (!['DAILY', 'WEEKLY'].includes(frequency)) return res.status(400).json({ error: 'Fréquence invalide' });
+    const { title, description, reward, assigneeId, frequency, weekday } = body;
     const assignee = await prisma.user.findUnique({ where: { id: assigneeId } });
     if (!assignee || assignee.familyId !== req.user.familyId || assignee.role !== 'CHILD') {
       return res.status(404).json({ error: 'Enfant introuvable' });
     }
     const template = await prisma.choreTemplate.create({
       data: {
-        familyId: req.user.familyId, title, description, reward: Math.max(0, parseFloat(reward) || 0),
-        assigneeId, frequency, weekday: frequency === 'WEEKLY' ? parseInt(weekday) : null,
+        familyId: req.user.familyId, title, description, reward,
+        assigneeId, frequency, weekday: frequency === 'WEEKLY' ? weekday : null,
       }
     });
     res.status(201).json({ template });
@@ -433,21 +468,31 @@ app.post('/api/chore-templates', authenticateToken, async (req: any, res) => {
 
 app.patch('/api/chore-templates/:id', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'PARENT') return res.status(403).json({ error: 'Interdit' });
+  const body = parseBody(updateChoreTemplateSchema, req, res);
+  if (!body) return;
   try {
     const existing = await prisma.choreTemplate.findUnique({ where: { id: req.params.id } });
     if (!existing) return res.status(404).json({ error: 'Modèle introuvable' });
     if (existing.familyId !== req.user.familyId) return res.status(403).json({ error: 'Interdit' });
-    const { title, description, reward, assigneeId, frequency, weekday, active } = req.body;
+    const { title, description, reward, assigneeId, frequency, weekday, active } = body;
+    if (assigneeId != null && !(await isFamilyChild(assigneeId, req.user.familyId))) {
+      return res.status(404).json({ error: 'Enfant introuvable' });
+    }
+    const nextFrequency = frequency ?? existing.frequency;
+    const nextWeekday = nextFrequency === 'WEEKLY' ? weekday ?? existing.weekday : null;
+    if (nextFrequency === 'WEEKLY' && nextWeekday === null) {
+      return res.status(400).json({ error: 'Champ requis : jour de la semaine' });
+    }
     const template = await prisma.choreTemplate.update({
       where: { id: req.params.id },
       data: {
         title: title ?? existing.title,
         description: description ?? existing.description,
-        reward: reward !== undefined ? Math.max(0, parseFloat(reward) || 0) : existing.reward,
+        reward: reward ?? existing.reward,
         assigneeId: assigneeId ?? existing.assigneeId,
-        frequency: frequency ?? existing.frequency,
-        weekday: weekday !== undefined ? parseInt(weekday) : existing.weekday,
-        active: active !== undefined ? !!active : existing.active,
+        frequency: nextFrequency,
+        weekday: nextWeekday,
+        active: active ?? existing.active,
       }
     });
     res.json({ template });
@@ -467,69 +512,97 @@ app.delete('/api/chore-templates/:id', authenticateToken, async (req: any, res) 
 
 app.post('/api/chores', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'PARENT') return res.status(403).json({ error: 'Action réservée aux parents' });
-  const { title, description, reward, assigneeId, deadline } = req.body;
-  const chore = await prisma.chore.create({
-    data: { title, description, reward: parseFloat(reward), assigneeId, deadline, status: 'PENDING' }
-  });
-  res.status(201).json({ chore });
+  const body = parseBody(createChoreSchema, req, res);
+  if (!body) return;
+  try {
+    const { title, description, reward, assigneeId, deadline } = body;
+    if (!(await isFamilyChild(assigneeId, req.user.familyId))) {
+      return res.status(404).json({ error: 'Enfant introuvable' });
+    }
+    const chore = await prisma.chore.create({
+      data: { title, description, reward, assigneeId, deadline, status: 'PENDING' }
+    });
+    res.status(201).json({ chore });
+  } catch (error: any) { res.status(400).json({ error: error.message }); }
 });
 
 app.patch('/api/chores/:id/submit', authenticateToken, async (req: any, res) => {
-  const { note, proofImageUrl } = req.body;
-  const chore = await prisma.chore.update({
-    where: { id: req.params.id },
-    data: { status: 'SUBMITTED', note, proofImageUrl }
-  });
-  emitToFamily(req.user.familyId, SocketEvents.CHORE_SUBMITTED, chore);
-  res.json({ chore });
+  if (req.user.role !== 'CHILD') return res.status(403).json({ error: 'Action réservée aux enfants' });
+  const body = parseBody(submitChoreSchema, req, res);
+  if (!body) return;
+  const { note, proofImageUrl } = body;
+  try {
+    const existing = await findFamilyChore(req.params.id, req.user.familyId);
+    if (!existing) return res.status(404).json({ error: 'Corvée non trouvée' });
+    if (existing.assigneeId !== req.user.id) return res.status(403).json({ error: 'Interdit' });
+    const chore = await transitionChore(prisma, existing.id, 'PENDING', { status: 'SUBMITTED', note, proofImageUrl });
+    if (!chore) return res.status(409).json({ error: 'Cette corvée a déjà été soumise ou traitée' });
+    emitToFamily(req.user.familyId, SocketEvents.CHORE_SUBMITTED, chore);
+    res.json({ chore });
+  } catch (error: any) { res.status(400).json({ error: error.message }); }
 });
 
 app.patch('/api/chores/:id/approve', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'PARENT') return res.status(403).json({ error: 'Interdit' });
-  
-  const chore = await prisma.chore.findUnique({ where: { id: req.params.id } });
-  if (!chore) return res.status(404).json({ error: 'Corvée non trouvée' });
 
-  const { updatedChore, updatedUser } = await prisma.$transaction(async (tx: any) => {
-    const updatedChore = await tx.chore.update({ where: { id: chore.id }, data: { status: 'COMPLETED' } });
-    await tx.transaction.create({
-      data: { childId: chore.assigneeId, amount: chore.reward, type: 'CHORE', description: `Corvée : ${chore.title}` }
-    });
-    const updatedUser = await tx.user.update({
-      where: { id: chore.assigneeId },
-      data: { balance: { increment: chore.reward } }
-    });
-    await applySplit(tx, chore.assigneeId, chore.reward);
-    return { updatedChore, updatedUser };
-  });
+  try {
+    const chore = await findFamilyChore(req.params.id, req.user.familyId);
+    if (!chore) return res.status(404).json({ error: 'Corvée non trouvée' });
 
-  emitToUser(chore.assigneeId, SocketEvents.CHORE_APPROVED, updatedChore);
-  emitToUser(chore.assigneeId, SocketEvents.BALANCE_UPDATED, { childId: chore.assigneeId, balance: updatedUser.balance });
-  res.json({ chore: updatedChore, balance: updatedUser.balance });
+    const result = await prisma.$transaction(async (tx: any) => {
+      const updatedChore = await transitionChore(tx, chore.id, 'SUBMITTED', { status: 'COMPLETED' });
+      if (!updatedChore) return null;
+      await tx.transaction.create({
+        data: { childId: chore.assigneeId, amount: chore.reward, type: 'CHORE', description: `Corvée : ${chore.title}` }
+      });
+      const updatedUser = await tx.user.update({
+        where: { id: chore.assigneeId },
+        data: { balance: { increment: chore.reward } }
+      });
+      await applySplit(tx, chore.assigneeId, chore.reward);
+      return { updatedChore, updatedUser };
+    });
+    if (!result) return res.status(409).json({ error: "Cette corvée n'est pas en attente de validation" });
+
+    const { updatedChore, updatedUser } = result;
+    emitToUser(chore.assigneeId, SocketEvents.CHORE_APPROVED, updatedChore);
+    emitToUser(chore.assigneeId, SocketEvents.BALANCE_UPDATED, { childId: chore.assigneeId, balance: updatedUser.balance });
+    res.json({ chore: updatedChore, balance: updatedUser.balance });
+  } catch (error: any) { res.status(400).json({ error: error.message }); }
 });
 
 app.patch('/api/chores/:id/reject', authenticateToken, async (req: any, res) => {
-  const { reason } = req.body;
-  const chore = await prisma.chore.update({
-    where: { id: req.params.id },
-    data: { status: 'REJECTED', rejectionReason: reason }
-  });
-  emitToUser(chore.assigneeId, SocketEvents.CHORE_REJECTED, chore);
-  res.json({ chore });
+  if (req.user.role !== 'PARENT') return res.status(403).json({ error: 'Interdit' });
+  const body = parseBody(rejectChoreSchema, req, res);
+  if (!body) return;
+  const { reason } = body;
+  try {
+    const existing = await findFamilyChore(req.params.id, req.user.familyId);
+    if (!existing) return res.status(404).json({ error: 'Corvée non trouvée' });
+    const chore = await transitionChore(prisma, existing.id, 'SUBMITTED', { status: 'REJECTED', rejectionReason: reason });
+    if (!chore) return res.status(409).json({ error: "Cette corvée n'est pas en attente de validation" });
+    emitToUser(chore.assigneeId, SocketEvents.CHORE_REJECTED, chore);
+    res.json({ chore });
+  } catch (error: any) { res.status(400).json({ error: error.message }); }
 });
 
 app.patch('/api/chores/:id', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'PARENT') return res.status(403).json({ error: 'Interdit' });
+  const body = parseBody(updateChoreSchema, req, res);
+  if (!body) return;
   try {
-    const existing = await prisma.chore.findUnique({ where: { id: req.params.id } });
+    const existing = await findFamilyChore(req.params.id, req.user.familyId);
     if (!existing) return res.status(404).json({ error: 'Corvée non trouvée' });
-    const { title, description, reward, assigneeId, deadline } = req.body;
+    const { title, description, reward, assigneeId, deadline } = body;
+    if (assigneeId != null && !(await isFamilyChild(assigneeId, req.user.familyId))) {
+      return res.status(404).json({ error: 'Enfant introuvable' });
+    }
     const chore = await prisma.chore.update({
       where: { id: req.params.id },
       data: {
         title: title ?? existing.title,
         description: description ?? existing.description,
-        reward: reward !== undefined ? parseFloat(reward) : existing.reward,
+        reward: reward ?? existing.reward,
         assigneeId: assigneeId ?? existing.assigneeId,
         deadline: deadline ?? existing.deadline,
       }
@@ -541,7 +614,7 @@ app.patch('/api/chores/:id', authenticateToken, async (req: any, res) => {
 app.delete('/api/chores/:id', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'PARENT') return res.status(403).json({ error: 'Interdit' });
   try {
-    const existing = await prisma.chore.findUnique({ where: { id: req.params.id } });
+    const existing = await findFamilyChore(req.params.id, req.user.familyId);
     if (!existing) return res.status(404).json({ error: 'Corvée non trouvée' });
     await prisma.chore.delete({ where: { id: req.params.id } });
     res.json({ success: true });
@@ -568,9 +641,11 @@ app.get('/api/goals', authenticateToken, async (req: any, res) => {
 });
 
 app.post('/api/goals', authenticateToken, async (req: any, res) => {
-  const { title, target, icon, isShared } = req.body;
+  const body = parseBody(createGoalSchema, req, res);
+  if (!body) return;
+  const { title, target, icon, isShared } = body;
   const goal = await prisma.goal.create({
-    data: { title, target: parseFloat(target), icon, isShared: !!isShared, familyId: req.user.familyId }
+    data: { title, target, icon, isShared: !!isShared, familyId: req.user.familyId }
   });
   // Auto-participate creator
   await prisma.goalParticipant.create({
@@ -581,9 +656,9 @@ app.post('/api/goals', authenticateToken, async (req: any, res) => {
 
 app.post('/api/goals/:id/fund', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'CHILD') return res.status(403).json({ error: 'Réservé aux enfants' });
-  const { amount } = req.body;
-  const val = parseFloat(amount);
-  if (!(val > 0)) return res.status(400).json({ error: 'Le montant doit être positif' });
+  const body = parseBody(goalAmountSchema, req, res);
+  if (!body) return;
+  const val = body.amount;
 
   try {
     const goal = await prisma.goal.findUnique({ where: { id: req.params.id }, include: { participants: true } });
@@ -611,9 +686,9 @@ app.post('/api/goals/:id/fund', authenticateToken, async (req: any, res) => {
 
 app.post('/api/goals/:id/withdraw', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'CHILD') return res.status(403).json({ error: 'Réservé aux enfants' });
-  const { amount } = req.body;
-  const val = parseFloat(amount);
-  if (!(val > 0)) return res.status(400).json({ error: 'Le montant doit être positif' });
+  const body = parseBody(goalAmountSchema, req, res);
+  if (!body) return;
+  const val = body.amount;
 
   try {
     const goal = await prisma.goal.findUnique({ where: { id: req.params.id }, include: { participants: true } });
@@ -761,7 +836,9 @@ app.get('/api/family/children', authenticateToken, async (req: any, res) => {
 
 app.post('/api/rules/:id/apply', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'PARENT') return res.status(403).json({ error: 'Interdit' });
-  const { childId } = req.body;
+  const body = parseBody(applyRuleSchema, req, res);
+  if (!body) return;
+  const { childId } = body;
   try {
     const rule = await prisma.rule.findUnique({ where: { id: req.params.id } });
     if (!rule) return res.status(404).json({ error: 'Règle non trouvée' });
@@ -801,9 +878,9 @@ app.get('/api/expenses', authenticateToken, async (req: any, res) => {
 
 app.post('/api/expenses/request', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'CHILD') return res.status(403).json({ error: 'Réservé aux enfants' });
-  const { title, description, amount, expenseType, reference } = req.body;
-  const val = parseFloat(amount);
-  if (!(val > 0)) return res.status(400).json({ error: 'Montant invalide' });
+  const body = parseBody(requestExpenseSchema, req, res);
+  if (!body) return;
+  const { title, description, amount: val, expenseType, reference } = body;
   try {
     const settings = await prisma.childSettings.findUnique({ where: { childId: req.user.id } });
 
@@ -855,15 +932,17 @@ app.get('/api/children/:id/settings', authenticateToken, async (req: any, res) =
 
 app.put('/api/children/:id/settings', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'PARENT') return res.status(403).json({ error: 'Interdit' });
+  const body = parseBody(childSettingsSchema, req, res);
+  if (!body) return;
   try {
     const child = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!child || child.familyId !== req.user.familyId || child.role !== 'CHILD') {
       return res.status(404).json({ error: 'Enfant introuvable' });
     }
-    const { maxExpensePerRequest, maxExpensePerWeek, frozen } = req.body;
+    const { maxExpensePerRequest, maxExpensePerWeek, frozen } = body;
     const data = {
-      maxExpensePerRequest: maxExpensePerRequest === '' || maxExpensePerRequest == null ? null : Math.max(0, parseFloat(maxExpensePerRequest)),
-      maxExpensePerWeek: maxExpensePerWeek === '' || maxExpensePerWeek == null ? null : Math.max(0, parseFloat(maxExpensePerWeek)),
+      maxExpensePerRequest: maxExpensePerRequest ?? null,
+      maxExpensePerWeek: maxExpensePerWeek ?? null,
       frozen: !!frozen,
     };
     const settings = await prisma.childSettings.upsert({
@@ -891,14 +970,14 @@ app.get('/api/children/:id/allowance', authenticateToken, async (req: any, res) 
 
 app.put('/api/children/:id/allowance', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'PARENT') return res.status(403).json({ error: 'Interdit' });
+  const body = parseBody(allowanceSchema, req, res);
+  if (!body) return;
   try {
     const child = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!child || child.familyId !== req.user.familyId || child.role !== 'CHILD') {
       return res.status(404).json({ error: 'Enfant introuvable' });
     }
-    const { amount, frequency, active } = req.body;
-    const val = Math.max(0, parseFloat(amount) || 0);
-    if (!['WEEKLY', 'MONTHLY'].includes(frequency)) return res.status(400).json({ error: 'Fréquence invalide' });
+    const { amount: val, frequency, active } = body;
     const allowance = await prisma.allowanceSchedule.upsert({
       where: { childId: req.params.id },
       update: { amount: val, frequency, active: active !== false },
@@ -912,15 +991,14 @@ app.put('/api/children/:id/allowance', authenticateToken, async (req: any, res) 
 
 app.put('/api/children/:id/split-settings', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'PARENT') return res.status(403).json({ error: 'Interdit' });
+  const body = parseBody(splitSettingsSchema, req, res);
+  if (!body) return;
   try {
     const child = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!child || child.familyId !== req.user.familyId || child.role !== 'CHILD') {
       return res.status(404).json({ error: 'Enfant introuvable' });
     }
-    const { splitEnabled, splitSavePct, splitSpendPct, splitGivePct } = req.body;
-    const save = Math.max(0, parseFloat(splitSavePct) || 0);
-    const spend = Math.max(0, parseFloat(splitSpendPct) || 0);
-    const give = Math.max(0, parseFloat(splitGivePct) || 0);
+    const { splitEnabled, splitSavePct: save, splitSpendPct: spend, splitGivePct: give } = body;
     if (Math.round(save + spend + give) !== 100) {
       return res.status(400).json({ error: 'Les trois pourcentages doivent totaliser 100%' });
     }
@@ -936,12 +1014,13 @@ app.put('/api/children/:id/split-settings', authenticateToken, async (req: any, 
 
 app.put('/api/expenses/:id/approve', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'PARENT') return res.status(403).json({ error: 'Interdit' });
-  const { approvedAmount, parentNote } = req.body;
+  const body = parseBody(approveExpenseSchema, req, res);
+  if (!body) return;
+  const { approvedAmount, parentNote } = body;
   try {
     const expense = await prisma.expenseRequest.findUnique({ where: { id: req.params.id } });
     if (!expense) return res.status(404).json({ error: 'Demande non trouvée' });
-    const requestedAmount = approvedAmount !== undefined && approvedAmount !== null && approvedAmount !== ''
-      ? parseFloat(approvedAmount) : expense.amount;
+    const requestedAmount = approvedAmount ?? expense.amount;
     if (!(requestedAmount > 0)) return res.status(400).json({ error: 'Montant invalide' });
 
     const result = await prisma.$transaction(async (tx: any) => {
@@ -963,7 +1042,9 @@ app.put('/api/expenses/:id/approve', authenticateToken, async (req: any, res) =>
 
 app.put('/api/expenses/:id/reject', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'PARENT') return res.status(403).json({ error: 'Interdit' });
-  const { parentNote } = req.body;
+  const body = parseBody(rejectExpenseSchema, req, res);
+  if (!body) return;
+  const { parentNote } = body;
   try {
     const expense = await prisma.expenseRequest.update({
       where: { id: req.params.id },
@@ -976,11 +1057,10 @@ app.put('/api/expenses/:id/reject', authenticateToken, async (req: any, res) => 
 
 app.post('/api/expenses/deduct', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'PARENT') return res.status(403).json({ error: 'Interdit' });
-  const { childId, amount, description } = req.body;
+  const body = parseBody(deductExpenseSchema, req, res);
+  if (!body) return;
+  const { childId, amount: val, description } = body;
   try {
-    const val = parseFloat(amount);
-    if (!(val > 0)) return res.status(400).json({ error: 'Montant invalide' });
-
     const result = await prisma.$transaction(async (tx: any) => {
       const { actual, capped, updatedUser } = await clampedDeduct(tx, childId, val);
       const transaction = await tx.transaction.create({
