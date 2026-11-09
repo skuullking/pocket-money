@@ -3,7 +3,7 @@ import { expect, loginAsChild, loginAsParent, test } from '../support/fixtures.j
 
 const WCAG_AA = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
 
-const PUBLIC_PAGES = ['/welcome', '/login', '/signup', '/forgot-password'];
+const PUBLIC_PAGES = ['/welcome', '/login', '/signup', '/forgot-password', '/privacy', '/terms'];
 
 const PARENT_PAGES = [
   '/parent',

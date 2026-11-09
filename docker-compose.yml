@@ -15,7 +15,12 @@ services:
       retries: 10
 
   app:
-    build: .
+    build:
+      context: .
+      args:
+        VITE_LEGAL_OPERATOR: ${LEGAL_OPERATOR:?LEGAL_OPERATOR manquant, voir .env.production.example}
+        VITE_LEGAL_CONTACT: ${LEGAL_CONTACT:?LEGAL_CONTACT manquant, voir .env.production.example}
+        VITE_LEGAL_HOST: ${LEGAL_HOST:?LEGAL_HOST manquant, voir .env.production.example}
     restart: unless-stopped
     depends_on:
       db:

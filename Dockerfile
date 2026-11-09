@@ -4,6 +4,10 @@ WORKDIR /app
 COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend/ .
+# Identité de l'éditeur affichée dans les pages légales.
+ARG VITE_LEGAL_OPERATOR
+ARG VITE_LEGAL_CONTACT
+ARG VITE_LEGAL_HOST
 RUN VITE_API_URL=/api npm run build
 
 # ── 2. Build backend ─────────────────────────────────────────────────────────

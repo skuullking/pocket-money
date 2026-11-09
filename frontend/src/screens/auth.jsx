@@ -81,6 +81,10 @@ export function Welcome() {
 
           <div className="pt-8 border-t border-on-surface/5 w-full text-center">
             <Link to="/signup" className="text-sm font-bold text-primary hover:underline">Créer une nouvelle famille</Link>
+            <p className="mt-6 text-xs text-on-surface-variant space-x-4">
+              <Link to="/privacy" className="underline">Confidentialité</Link>
+              <Link to="/terms" className="underline">Conditions d'utilisation</Link>
+            </p>
           </div>
         </div>
       </div>
