@@ -9,6 +9,7 @@ import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
 import { AUTH_COOKIE, readAuthCookie } from './authCookie';
 import { assertEmailConfig, assertStrongSecret } from './config';
+import { installProcessHandlers, isIncident, logger, reportError } from './monitoring';
 import { initSocket, emitToFamily, emitToUser, disconnectFamily, disconnectUser, SocketEvents } from './socket';
 import {
   allowanceSchema, applyRuleSchema, approveExpenseSchema, childSettingsSchema, consentSchema, createChoreSchema,
@@ -88,6 +89,18 @@ const COOKIE_SAMESITE = (() => {
 const AUTH_COOKIE_OPTIONS = { httpOnly: true, secure: COOKIE_SECURE, sameSite: COOKIE_SAMESITE, path: '/' };
 const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // aligné sur l'expiration du JWT
 
+// Méthode, chemin sans paramètres, statut et durée : jamais de contenu de requête.
+app.use((req, res, next) => {
+  const startedAt = Date.now();
+  res.on('finish', () => {
+    if (req.path === '/api/health' && res.statusCode < 500) return;
+    const fields = { method: req.method, path: req.path, status: res.statusCode, durationMs: Date.now() - startedAt };
+    if (res.statusCode >= 500) logger.error('request', fields);
+    else logger.info('request', fields);
+  });
+  next();
+});
+
 app.use(cors({ origin: CLIENT_ORIGIN, credentials: true }));
 
 // Le navigateur joint le cookie tout seul : on refuse les écritures venant d'un
@@ -148,6 +161,14 @@ const sendPasswordResetEmail = async (to: string, resetUrl: string) => {
     html: `<p>Bonjour,</p><p>Clique sur ce lien pour choisir un nouveau mot de passe (valable 1 heure) :</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>Si tu n'es pas à l'origine de cette demande, ignore cet email.</p>`,
   });
   if (error) throw new Error(`Resend: ${error.message}`);
+};
+
+const sendHandlerError = (error: any, req: any, res: any) => {
+  if (isIncident(error)) {
+    reportError(error, `${req.method} ${req.path}`);
+    return res.status(500).json({ error: 'Erreur serveur, réessaie plus tard.' });
+  }
+  res.status(400).json({ error: error.message });
 };
 
 // Sérialise les lecture-puis-écriture sur un compte jusqu'à la fin de la transaction.
@@ -405,7 +426,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     if (!user || !(await bcrypt.compare(password, user.password))) return res.status(401).json({ error: 'Identifiants invalides' });
     setAuthCookie(res, user.id);
     res.json({ user: { id: user.id, name: user.name, role: user.role, familyId: user.familyId, balance: user.balance, monthDelta: await monthDeltaOf(user.id), avatar: user.avatar, color: user.color, age: user.age } });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 // Le cookie httpOnly est invisible pour le front : seul le serveur peut l'effacer.
@@ -418,7 +439,7 @@ app.get('/api/auth/me', authenticateToken, async (req: any, res) => {
   const u = req.user;
   try {
     res.json({ user: { id: u.id, name: u.name, role: u.role, familyId: u.familyId, balance: u.balance, monthDelta: await monthDeltaOf(u.id), saveBalance: u.saveBalance, spendBalance: u.spendBalance, giveBalance: u.giveBalance, avatar: u.avatar, color: u.color, age: u.age, settings: u.settings, parentalConsentAt: u.parentalConsentAt } });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 // ── Récupération de mot de passe ─────────────────────────────────────────
@@ -443,7 +464,7 @@ app.post('/api/auth/forgot-password', forgotPasswordLimiter, async (req, res) =>
     res.json(genericResponse);
   } catch (error: any) {
     // Ne jamais révéler la cause exacte côté client — logguer seulement.
-    console.error('[forgot-password]', error);
+    reportError(error, 'forgot-password');
     res.json(genericResponse);
   }
 });
@@ -465,13 +486,13 @@ app.post('/api/auth/reset-password', async (req, res) => {
       prisma.passwordResetToken.update({ where: { id: resetToken.id }, data: { used: true } }),
     ]);
     res.json({ message: 'Mot de passe mis à jour.' });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 // ── Family & Members ──────────────────────────────────────────────────────
 
 app.get('/api/family', authenticateToken, async (req: any, res) => {
-  await processDueAllowances(req.user.familyId).catch(err => console.error('[processDueAllowances]', err));
+  await processDueAllowances(req.user.familyId).catch(err => reportError(err, 'processDueAllowances'));
   const family = await prisma.family.findUnique({
     where: { id: req.user.familyId },
     include: {
@@ -497,7 +518,7 @@ app.delete('/api/family', authenticateToken, deleteFamilyLimiter, async (req: an
     disconnectFamily(req.user.familyId);
     res.clearCookie(AUTH_COOKIE, AUTH_COOKIE_OPTIONS);
     res.json({ success: true });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 // ── RGPD ─────────────────────────────────────────────────────────────────
@@ -510,7 +531,7 @@ app.post('/api/account/consent', authenticateToken, async (req: any, res) => {
     const now = new Date();
     await prisma.user.update({ where: { id: req.user.id }, data: { termsAcceptedAt: now, parentalConsentAt: now } });
     res.json({ parentalConsentAt: now });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 // Droits d'accès et de portabilité : tout ce que la famille a stocké, sauf les
@@ -530,7 +551,7 @@ app.get('/api/account/export', authenticateToken, exportLimiter, async (req: any
     const users = family.users.map(({ password: _password, ...user }) => user);
     res.setHeader('Content-Disposition', 'attachment; filename="pocketmoney-export.json"');
     res.json({ exportedAt: new Date().toISOString(), family: { ...family, users } });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 // Le dernier parent ne peut pas partir seul : ses enfants resteraient sans
@@ -559,7 +580,7 @@ app.delete('/api/account', authenticateToken, deleteFamilyLimiter, async (req: a
     emitToFamily(req.user.familyId, SocketEvents.MEMBER_REMOVED, { childId: req.user.id });
     res.clearCookie(AUTH_COOKIE, AUTH_COOKIE_OPTIONS);
     res.json({ success: true });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 // L'historique de l'enfant part avec lui par cascade. Ses objectifs personnels
@@ -590,7 +611,7 @@ app.delete('/api/children/:id', authenticateToken, async (req: any, res) => {
     disconnectUser(childId);
     emitToFamily(req.user.familyId, SocketEvents.MEMBER_REMOVED, { childId });
     res.json({ success: true });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 // Les enfants n'ont pas d'email : c'est un parent de la famille qui rétablit l'accès.
@@ -605,7 +626,7 @@ app.put('/api/children/:id/password', authenticateToken, async (req: any, res) =
     const password = await bcrypt.hash(body.newPassword, 10);
     await prisma.user.update({ where: { id: req.params.id }, data: { password } });
     res.json({ success: true });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 // ── Rules CRUD (chaque règle garde son identité — pas de remplacement en bloc) ─
@@ -614,7 +635,7 @@ app.get('/api/rules', authenticateToken, async (req: any, res) => {
   try {
     const rules = await prisma.rule.findMany({ where: { familyId: req.user.familyId }, orderBy: { title: 'asc' } });
     res.json({ rules });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 app.post('/api/rules', authenticateToken, async (req: any, res) => {
@@ -627,7 +648,7 @@ app.post('/api/rules', authenticateToken, async (req: any, res) => {
       data: { title, description, amount, active: active !== false, familyId: req.user.familyId }
     });
     res.status(201).json({ rule });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 app.put('/api/rules/:id', authenticateToken, async (req: any, res) => {
@@ -649,7 +670,7 @@ app.put('/api/rules/:id', authenticateToken, async (req: any, res) => {
       }
     });
     res.json({ rule });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 app.delete('/api/rules/:id', authenticateToken, async (req: any, res) => {
@@ -660,7 +681,7 @@ app.delete('/api/rules/:id', authenticateToken, async (req: any, res) => {
     if (existing.familyId !== req.user.familyId) return res.status(403).json({ error: 'Interdit' });
     await prisma.rule.delete({ where: { id: req.params.id } });
     res.json({ success: true });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 app.get('/api/family/penalty-history', authenticateToken, async (req: any, res) => {
@@ -672,7 +693,7 @@ app.get('/api/family/penalty-history', authenticateToken, async (req: any, res) 
       orderBy: { date: 'desc' }
     });
     res.json({ history });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 // ── Chores CRUD ───────────────────────────────────────────────────────────
@@ -699,7 +720,7 @@ const transitionChore = async (db: any, id: string, from: string, data: object) 
 };
 
 app.get('/api/chores', authenticateToken, async (req: any, res) => {
-  await generateDueChores(req.user.familyId).catch(err => console.error('[generateDueChores]', err));
+  await generateDueChores(req.user.familyId).catch(err => reportError(err, 'generateDueChores'));
   const chores = await prisma.chore.findMany({
     where: { assignee: { familyId: req.user.familyId } },
     orderBy: { createdAt: 'desc' }
@@ -714,7 +735,7 @@ app.get('/api/chore-templates', authenticateToken, async (req: any, res) => {
   try {
     const templates = await prisma.choreTemplate.findMany({ where: { familyId: req.user.familyId }, orderBy: { createdAt: 'desc' } });
     res.json({ templates });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 app.post('/api/chore-templates', authenticateToken, async (req: any, res) => {
@@ -734,7 +755,7 @@ app.post('/api/chore-templates', authenticateToken, async (req: any, res) => {
       }
     });
     res.status(201).json({ template });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 app.patch('/api/chore-templates/:id', authenticateToken, async (req: any, res) => {
@@ -767,7 +788,7 @@ app.patch('/api/chore-templates/:id', authenticateToken, async (req: any, res) =
       }
     });
     res.json({ template });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 app.delete('/api/chore-templates/:id', authenticateToken, async (req: any, res) => {
@@ -778,7 +799,7 @@ app.delete('/api/chore-templates/:id', authenticateToken, async (req: any, res) 
     if (existing.familyId !== req.user.familyId) return res.status(403).json({ error: 'Interdit' });
     await prisma.choreTemplate.delete({ where: { id: req.params.id } });
     res.json({ success: true });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 app.post('/api/chores', authenticateToken, async (req: any, res) => {
@@ -794,7 +815,7 @@ app.post('/api/chores', authenticateToken, async (req: any, res) => {
       data: { title, description, reward, assigneeId, deadline, status: 'PENDING' }
     });
     res.status(201).json({ chore });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 app.patch('/api/chores/:id/submit', authenticateToken, async (req: any, res) => {
@@ -810,7 +831,7 @@ app.patch('/api/chores/:id/submit', authenticateToken, async (req: any, res) => 
     if (!chore) return res.status(409).json({ error: 'Cette corvée a déjà été soumise ou traitée' });
     emitToFamily(req.user.familyId, SocketEvents.CHORE_SUBMITTED, chore);
     res.json({ chore });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 app.patch('/api/chores/:id/approve', authenticateToken, async (req: any, res) => {
@@ -839,7 +860,7 @@ app.patch('/api/chores/:id/approve', authenticateToken, async (req: any, res) =>
     emitToUser(chore.assigneeId, SocketEvents.CHORE_APPROVED, updatedChore);
     emitToUser(chore.assigneeId, SocketEvents.BALANCE_UPDATED, { childId: chore.assigneeId, balance: updatedUser.balance });
     res.json({ chore: updatedChore, balance: updatedUser.balance });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 app.patch('/api/chores/:id/reject', authenticateToken, async (req: any, res) => {
@@ -854,7 +875,7 @@ app.patch('/api/chores/:id/reject', authenticateToken, async (req: any, res) => 
     if (!chore) return res.status(409).json({ error: "Cette corvée n'est pas en attente de validation" });
     emitToUser(chore.assigneeId, SocketEvents.CHORE_REJECTED, chore);
     res.json({ chore });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 app.patch('/api/chores/:id', authenticateToken, async (req: any, res) => {
@@ -879,7 +900,7 @@ app.patch('/api/chores/:id', authenticateToken, async (req: any, res) => {
       }
     });
     res.json({ chore });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 app.delete('/api/chores/:id', authenticateToken, async (req: any, res) => {
@@ -889,7 +910,7 @@ app.delete('/api/chores/:id', authenticateToken, async (req: any, res) => {
     if (!existing) return res.status(404).json({ error: 'Corvée non trouvée' });
     await prisma.chore.delete({ where: { id: req.params.id } });
     res.json({ success: true });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 // ── Goals & Savings ───────────────────────────────────────────────────────
@@ -968,7 +989,7 @@ app.post('/api/goals/:id/fund', authenticateToken, async (req: any, res) => {
     });
     emitToFamily(req.user.familyId, SocketEvents.GOAL_FUNDED, updatedGoal);
     res.json({ goal: updatedGoal, balance: updatedUser.balance });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 app.post('/api/goals/:id/withdraw', authenticateToken, async (req: any, res) => {
@@ -1008,7 +1029,7 @@ app.post('/api/goals/:id/withdraw', authenticateToken, async (req: any, res) => 
       };
     });
     res.json({ goal: updatedGoal, balance: updatedUser.balance });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 app.put('/api/goals/:id/buy', authenticateToken, async (req: any, res) => {
@@ -1023,7 +1044,7 @@ app.put('/api/goals/:id/buy', authenticateToken, async (req: any, res) => {
     });
     if (count !== 1) return res.status(400).json({ error: "L'objectif n'est pas encore atteint" });
     res.json({ goal: await prisma.goal.findUniqueOrThrow({ where: { id: goal.id } }) });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 // ── Transactions ──────────────────────────────────────────────────────────
@@ -1119,7 +1140,7 @@ app.get('/api/analytics/overview', authenticateToken, async (req: any, res) => {
       savingsTrend,
       perChild,
     });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 // ── Family Children ───────────────────────────────────────────────────────
@@ -1131,7 +1152,7 @@ app.get('/api/family/children', authenticateToken, async (req: any, res) => {
       select: { id: true, name: true, avatar: true, color: true, balance: true, age: true, settings: true }
     });
     res.json({ children });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 // ── Rules / Sanctions ─────────────────────────────────────────────────────
@@ -1157,7 +1178,7 @@ app.post('/api/rules/:id/apply', authenticateToken, async (req: any, res) => {
     emitToUser(childId, SocketEvents.PENALTY_APPLIED, result.transaction);
     emitToUser(childId, SocketEvents.BALANCE_UPDATED, { childId, balance: result.updatedUser.balance });
     res.json({ transaction: result.transaction, balance: result.updatedUser.balance, capped: result.capped });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 // ── Expenses ──────────────────────────────────────────────────────────────
@@ -1177,7 +1198,7 @@ app.get('/api/expenses', authenticateToken, async (req: any, res) => {
       orderBy: { createdAt: 'desc' }
     });
     res.json({ expenses });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 app.post('/api/expenses/request', authenticateToken, async (req: any, res) => {
@@ -1222,7 +1243,7 @@ app.post('/api/expenses/request', authenticateToken, async (req: any, res) => {
     });
     emitToFamily(req.user.familyId, SocketEvents.EXPENSE_REQUESTED, expense);
     res.status(201).json({ expense });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 // ── Child Settings (limites de dépenses, gel de compte) ─────────────────────
@@ -1240,7 +1261,7 @@ app.get('/api/children/:id/settings', authenticateToken, async (req: any, res) =
       create: { childId: req.params.id }
     });
     res.json({ settings });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 app.put('/api/children/:id/settings', authenticateToken, async (req: any, res) => {
@@ -1264,7 +1285,7 @@ app.put('/api/children/:id/settings', authenticateToken, async (req: any, res) =
       create: { childId: req.params.id, ...data }
     });
     res.json({ settings });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 // ── Argent de poche récurrent ────────────────────────────────────────────
@@ -1278,7 +1299,7 @@ app.get('/api/children/:id/allowance', authenticateToken, async (req: any, res) 
     }
     const allowance = await prisma.allowanceSchedule.findUnique({ where: { childId: req.params.id } });
     res.json({ allowance });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 app.put('/api/children/:id/allowance', authenticateToken, async (req: any, res) => {
@@ -1297,7 +1318,7 @@ app.put('/api/children/:id/allowance', authenticateToken, async (req: any, res) 
       create: { childId: req.params.id, amount: val, frequency, active: active !== false }
     });
     res.json({ allowance });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 // ── Répartition Épargne / Dépense / Don ──────────────────────────────────
@@ -1322,7 +1343,7 @@ app.put('/api/children/:id/split-settings', authenticateToken, async (req: any, 
       create: { childId: req.params.id, ...data }
     });
     res.json({ settings });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 const EXPENSE_ALREADY_PROCESSED = 'Cette demande a déjà été traitée';
@@ -1364,7 +1385,7 @@ app.put('/api/expenses/:id/approve', authenticateToken, async (req: any, res) =>
     emitToUser(expense.childId, SocketEvents.EXPENSE_APPROVED, result.updatedExpense);
     emitToUser(expense.childId, SocketEvents.BALANCE_UPDATED, { childId: expense.childId, balance: result.updatedUser.balance });
     res.json({ expense: result.updatedExpense, balance: result.updatedUser.balance, capped: result.capped });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 app.put('/api/expenses/:id/reject', authenticateToken, async (req: any, res) => {
@@ -1379,7 +1400,7 @@ app.put('/api/expenses/:id/reject', authenticateToken, async (req: any, res) => 
     if (!expense) return res.status(409).json({ error: EXPENSE_ALREADY_PROCESSED });
     emitToUser(expense.childId, SocketEvents.EXPENSE_REJECTED, expense);
     res.json({ expense });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 app.post('/api/expenses/deduct', authenticateToken, async (req: any, res) => {
@@ -1399,14 +1420,19 @@ app.post('/api/expenses/deduct', authenticateToken, async (req: any, res) => {
     emitToUser(childId, SocketEvents.EXPENSE_DEDUCTED, result.transaction);
     emitToUser(childId, SocketEvents.BALANCE_UPDATED, { childId, balance: result.updatedUser.balance });
     res.json({ transaction: result.transaction, balance: result.updatedUser.balance, capped: result.capped });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 // Le front affiche `error` dans un toast : pas de page HTML pour un corps trop gros.
 app.use((err: any, req: any, res: any, next: any) => {
-  if (err.type !== 'entity.too.large') return next(err);
-  res.status(413).json({ error: 'Requête trop volumineuse' });
+  if (err.type === 'entity.too.large') return res.status(413).json({ error: 'Requête trop volumineuse' });
+  if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Corps de requête invalide' });
+  reportError(err, `${req.method} ${req.path}`);
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: 'Erreur serveur, réessaie plus tard.' });
 });
+
+if (process.env.NODE_ENV === 'production') installProcessHandlers();
 
 if (!process.env.VERCEL) {
   // http.createServer + initSocket (au lieu d'un simple app.listen) pour
@@ -1416,7 +1442,7 @@ if (!process.env.VERCEL) {
   // donc le temps réel ne fonctionne que sur le déploiement Docker/self-hosted.
   const httpServer = createServer(app);
   initSocket(httpServer, CLIENT_ORIGIN);
-  httpServer.listen(port, () => console.log(`🚀 API PocketMoney sur http://localhost:${port}`));
+  httpServer.listen(port, () => logger.info('server started', { port: Number(port) }));
 }
 
 export default app;

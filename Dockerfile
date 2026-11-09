@@ -8,6 +8,7 @@ COPY frontend/ .
 ARG VITE_LEGAL_OPERATOR
 ARG VITE_LEGAL_CONTACT
 ARG VITE_LEGAL_HOST
+ARG VITE_SENTRY_DSN
 RUN VITE_API_URL=/api npm run build
 
 # ── 2. Build backend ─────────────────────────────────────────────────────────

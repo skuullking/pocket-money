@@ -1,7 +1,11 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
+import { ErrorBoundary } from './ErrorBoundary.jsx'
+import { initErrorTracking } from './errorTracking'
 import './index.css'
+
+initErrorTracking()
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -10,5 +14,7 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <App />
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
 )
