@@ -100,8 +100,22 @@ export function emitToUser(
   io.to(`user:${userId}`).emit(event, data);
 }
 
+// Un compte supprimé ne doit plus recevoir les événements de la famille. Sans
+// fermeture du transport : l'événement émis juste avant arrive d'abord au client.
+export function disconnectUser(userId: string): void {
+  if (!io) return;
+  io.in(`user:${userId}`).disconnectSockets();
+}
+
+export function disconnectFamily(familyId: string): void {
+  if (!io) return;
+  io.in(`family:${familyId}`).disconnectSockets();
+}
+
 // Socket event type constants
 export const SocketEvents = {
+  ACCOUNT_DELETED: 'account:deleted',
+  MEMBER_REMOVED: 'member:removed',
   EXPENSE_REQUESTED: 'expense:requested',
   EXPENSE_APPROVED: 'expense:approved',
   EXPENSE_REJECTED: 'expense:rejected',

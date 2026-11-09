@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { CheckCircle, AlertCircle, Info, XCircle, X, Check, Sparkles, Sun, Moon, ChevronRight } from 'lucide-react';
 
 // ── Theme Toggle — Puffy Squishy Pill ─────────────────────────────────────
@@ -232,8 +233,9 @@ export function StatCard({ title, value, sub, icon: Icon, color = 'primary', onC
 // ── Modal ────────────────────────────────────────────────────────────────
 export function Modal({ open, onClose, title, children, footer }) {
   if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 sm:p-12">
+  // Rendue sur <body> pour passer au-dessus de la barre latérale, mais sous les toasts (z-[100]).
+  return createPortal(
+    <div className="fixed inset-0 z-[90] flex items-center justify-center p-6 sm:p-12">
       <div className="absolute inset-0 bg-black/50 dark:bg-black/80 backdrop-blur-xl animate-fade-in" onClick={onClose} />
       <div className="relative bg-background dark:bg-surface-container-low w-full max-w-xl max-h-[85vh] rounded-[3rem] shadow-2xl overflow-hidden flex flex-col animate-pop-in border-4 border-white/20">
         <div className="px-10 py-8 border-b border-on-surface/10 flex items-center justify-between">
@@ -243,7 +245,8 @@ export function Modal({ open, onClose, title, children, footer }) {
         <div className="flex-1 overflow-y-auto px-10 py-8 custom-scrollbar">{children}</div>
         {footer && <div className="px-10 py-8 bg-surface-container/50 border-t border-on-surface/10">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

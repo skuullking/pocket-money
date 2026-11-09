@@ -10,6 +10,7 @@ import {
   MoreHorizontal, Edit3, ShoppingBag, Lock
 } from 'lucide-react';
 import { useApp } from '../context';
+import { compressProofImage } from '../proofImage';
 import { Layout } from '../components/layout';
 import {
   Card, Btn, Badge, StatusBadge, Avatar, StatCard,
@@ -204,7 +205,7 @@ export function AvailableChores() {
 export function SubmitChore() {
   const navigate = useNavigate();
   const { choreId } = useParams();
-  const { chores, submitChore } = useApp();
+  const { chores, submitChore, showToast } = useApp();
   const chore = (chores || []).find(c => c.id === choreId);
   const [photo, setPhoto] = useState(null);
   const [note, setNote] = useState('');
@@ -213,12 +214,18 @@ export function SubmitChore() {
 
   if (!chore) return <Layout title="Erreur" showBack onBack={() => navigate('/child')}><div className="text-center py-20"><p className="font-bold">Corvée non trouvée</p></div></Layout>;
 
-  const handleFile = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (ev) => setPhoto(ev.target.result);
-      reader.readAsDataURL(file);
+  const handleFile = async (e) => {
+    const input = e.target;
+    const file = input.files[0];
+    if (!file) return;
+    setIsSubmitting(true);
+    try {
+      setPhoto(await compressProofImage(file));
+    } catch (error) {
+      showToast("Cette photo n'a pas pu être préparée. Essaie avec une autre.", 'error');
+    } finally {
+      input.value = '';
+      setIsSubmitting(false);
     }
   };
 const handleSubmit = async () => {

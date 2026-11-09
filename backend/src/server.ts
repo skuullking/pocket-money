@@ -8,10 +8,10 @@ import { createServer } from 'http';
 import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
 import { AUTH_COOKIE, readAuthCookie } from './authCookie';
-import { initSocket, emitToFamily, emitToUser, SocketEvents } from './socket';
+import { initSocket, emitToFamily, emitToUser, disconnectFamily, disconnectUser, SocketEvents } from './socket';
 import {
   allowanceSchema, applyRuleSchema, approveExpenseSchema, childSettingsSchema, createChoreSchema,
-  createChoreTemplateSchema, createGoalSchema, createRuleSchema, deductExpenseSchema, forgotPasswordSchema,
+  createChoreTemplateSchema, createGoalSchema, createRuleSchema, deductExpenseSchema, deleteFamilySchema, forgotPasswordSchema,
   goalAmountSchema, loginSchema, parseBody, registerChildSchema, registerParentCreateSchema,
   registerParentJoinSchema, rejectChoreSchema, rejectExpenseSchema, requestExpenseSchema, resetPasswordSchema,
   splitSettingsSchema, submitChoreSchema, updateChoreSchema, updateChoreTemplateSchema, updateRuleSchema,
@@ -95,8 +95,9 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
+// Doit rester au-dessus du plafond des photos de preuve (validation.ts).
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ limit: '1mb', extended: true }));
 
 app.get('/', (req, res) => {
   res.json({ name: 'PocketMoney API', status: 'ok', version: '1.0.0' });
@@ -151,6 +152,23 @@ const clampedDeduct = async (tx: any, childId: string, amount: number) => {
   return { actual, capped: actual < amount, updatedUser };
 };
 
+// Le calendrier des corvées et de l'argent de poche suit un seul fuseau, quel que
+// soit celui du serveur (UTC en Docker). Un fuseau invalide bloque le démarrage.
+const appDateFormat = new Intl.DateTimeFormat('en-US', {
+  timeZone: process.env.APP_TIMEZONE || 'Europe/Paris',
+  year: 'numeric', month: '2-digit', day: '2-digit',
+});
+
+// Date du calendrier sous la forme YYYY-MM-DD.
+const appDate = (date: Date) => {
+  const parts = Object.fromEntries(appDateFormat.formatToParts(date).map(part => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+};
+
+// Les jours sont comptés sur les dates YYYY-MM-DD : les passages à l'heure d'été ne les décalent pas.
+const utcMidnight = (dateStr: string) => new Date(`${dateStr}T00:00:00Z`);
+const daysBetween = (from: string, to: string) => Math.round((utcMidnight(to).getTime() - utcMidnight(from).getTime()) / 86_400_000);
+
 // Argent de poche récurrent : évalué "paresseusement" (pas de node-cron — ne
 // survivrait pas au déploiement serverless Vercel). Appelé à chaque
 // chargement de GET /api/family : crédite tout paiement dû depuis la
@@ -160,18 +178,23 @@ const processDueAllowances = async (familyId: string) => {
     where: { active: true, child: { familyId } },
   });
   const now = new Date();
+  const today = appDate(now);
   for (const s of schedules) {
-    const dueMs = s.frequency === 'MONTHLY' ? 30 * 24 * 3600 * 1000 : 7 * 24 * 3600 * 1000;
-    if (!s.lastPaidAt || now.getTime() - s.lastPaidAt.getTime() >= dueMs) {
-      await prisma.$transaction(async (tx: any) => {
-        await tx.user.update({ where: { id: s.childId }, data: { balance: { increment: s.amount } } });
-        await tx.transaction.create({
-          data: { childId: s.childId, amount: s.amount, type: 'ALLOWANCE', description: 'Argent de poche' }
-        });
-        await tx.allowanceSchedule.update({ where: { id: s.id }, data: { lastPaidAt: now } });
-        await applySplit(tx, s.childId, s.amount);
+    const periodDays = s.frequency === 'MONTHLY' ? 30 : 7;
+    if (s.lastPaidAt && daysBetween(appDate(s.lastPaidAt), today) < periodDays) continue;
+    await prisma.$transaction(async (tx: any) => {
+      // Le `where` porte la date lue : de deux requêtes simultanées, une seule verse.
+      const { count } = await tx.allowanceSchedule.updateMany({
+        where: { id: s.id, active: true, lastPaidAt: s.lastPaidAt },
+        data: { lastPaidAt: now },
       });
-    }
+      if (count !== 1) return;
+      await tx.user.update({ where: { id: s.childId }, data: { balance: { increment: s.amount } } });
+      await tx.transaction.create({
+        data: { childId: s.childId, amount: s.amount, type: 'ALLOWANCE', description: 'Argent de poche' }
+      });
+      await applySplit(tx, s.childId, s.amount);
+    });
   }
 };
 
@@ -179,22 +202,26 @@ const processDueAllowances = async (familyId: string) => {
 // poche (voir processDueAllowances) — appelé à chaque GET /api/chores.
 const generateDueChores = async (familyId: string) => {
   const templates = await prisma.choreTemplate.findMany({ where: { active: true, familyId } });
-  const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10);
-  const weekday = today.getDay();
+  const todayStr = appDate(new Date());
+  const weekday = utcMidnight(todayStr).getUTCDay();
   for (const t of templates) {
     if (t.lastGeneratedDate === todayStr) continue;
     const isDue = t.frequency === 'DAILY' || (t.frequency === 'WEEKLY' && t.weekday === weekday);
     if (!isDue) continue;
-    await prisma.$transaction([
-      prisma.chore.create({
+    await prisma.$transaction(async (tx: any) => {
+      // Le `where` porte la date lue : de deux requêtes simultanées, une seule crée la corvée.
+      const { count } = await tx.choreTemplate.updateMany({
+        where: { id: t.id, active: true, lastGeneratedDate: t.lastGeneratedDate },
+        data: { lastGeneratedDate: todayStr },
+      });
+      if (count !== 1) return;
+      await tx.chore.create({
         data: {
           title: t.title, description: t.description, reward: t.reward,
           assigneeId: t.assigneeId, deadline: todayStr, status: 'PENDING', templateId: t.id
         }
-      }),
-      prisma.choreTemplate.update({ where: { id: t.id }, data: { lastGeneratedDate: todayStr } }),
-    ]);
+      });
+    });
   }
 };
 
@@ -250,6 +277,7 @@ const authLimiter = (limit: number, windowMinutes: number, error: string, skipSu
 const loginLimiter = authLimiter(10, 15, 'Trop de tentatives de connexion. Réessaie dans 15 minutes.', true);
 const registerLimiter = authLimiter(10, 60, "Trop d'inscriptions depuis cette connexion. Réessaie plus tard.");
 const forgotPasswordLimiter = authLimiter(5, 60, 'Trop de demandes de réinitialisation. Réessaie plus tard.');
+const deleteFamilyLimiter = authLimiter(5, 15, 'Trop de tentatives. Réessaie dans 15 minutes.', true);
 
 // Les conflits d'unicité remontent dans un toast : pas d'erreur Prisma brute.
 const sendRegisterError = (error: any, res: any) => {
@@ -414,6 +442,55 @@ app.get('/api/family', authenticateToken, async (req: any, res) => {
     }
   });
   res.json({ family });
+});
+
+// Le mot de passe est redemandé : l'opération efface toutes les données de la
+// famille (corvées, soldes, historique) par cascade, sans retour possible.
+app.delete('/api/family', authenticateToken, deleteFamilyLimiter, async (req: any, res) => {
+  if (req.user.role !== 'PARENT') return res.status(403).json({ error: 'Interdit' });
+  const body = parseBody(deleteFamilySchema, req, res);
+  if (!body) return;
+  try {
+    if (!(await bcrypt.compare(body.password, req.user.password))) {
+      return res.status(403).json({ error: 'Mot de passe incorrect' });
+    }
+    await prisma.family.delete({ where: { id: req.user.familyId } });
+    emitToFamily(req.user.familyId, SocketEvents.ACCOUNT_DELETED, {});
+    disconnectFamily(req.user.familyId);
+    res.clearCookie(AUTH_COOKIE, AUTH_COOKIE_OPTIONS);
+    res.json({ success: true });
+  } catch (error: any) { res.status(400).json({ error: error.message }); }
+});
+
+// L'historique de l'enfant part avec lui par cascade. Ses objectifs personnels
+// disparaissent aussi, et sa part quitte les objectifs communs encore en cours.
+app.delete('/api/children/:id', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'PARENT') return res.status(403).json({ error: 'Interdit' });
+  const childId = req.params.id;
+  try {
+    if (!(await isFamilyChild(childId, req.user.familyId))) {
+      return res.status(404).json({ error: 'Enfant introuvable' });
+    }
+    await prisma.$transaction(async (tx: any) => {
+      const links = await tx.goalParticipant.findMany({
+        where: { childId },
+        include: { goal: { include: { participants: true } } },
+      });
+      for (const { goal, contributedAmount } of links) {
+        if (!goal.isShared && goal.participants.length === 1) {
+          await tx.goal.delete({ where: { id: goal.id } });
+        } else if (goal.status === 'IN_PROGRESS' && contributedAmount > 0) {
+          await tx.goal.update({ where: { id: goal.id }, data: { current: { decrement: contributedAmount } } });
+          await tx.goal.updateMany({ where: { id: goal.id, current: { lt: 0 } }, data: { current: 0 } });
+        }
+      }
+      await tx.user.delete({ where: { id: childId } });
+    });
+    emitToUser(childId, SocketEvents.ACCOUNT_DELETED, {});
+    disconnectUser(childId);
+    emitToFamily(req.user.familyId, SocketEvents.MEMBER_REMOVED, { childId });
+    res.json({ success: true });
+  } catch (error: any) { res.status(400).json({ error: error.message }); }
 });
 
 // ── Rules CRUD (chaque règle garde son identité — pas de remplacement en bloc) ─
@@ -1151,6 +1228,12 @@ app.post('/api/expenses/deduct', authenticateToken, async (req: any, res) => {
     emitToUser(childId, SocketEvents.BALANCE_UPDATED, { childId, balance: result.updatedUser.balance });
     res.json({ transaction: result.transaction, balance: result.updatedUser.balance, capped: result.capped });
   } catch (error: any) { res.status(400).json({ error: error.message }); }
+});
+
+// Le front affiche `error` dans un toast : pas de page HTML pour un corps trop gros.
+app.use((err: any, req: any, res: any, next: any) => {
+  if (err.type !== 'entity.too.large') return next(err);
+  res.status(413).json({ error: 'Requête trop volumineuse' });
 });
 
 if (!process.env.VERCEL) {

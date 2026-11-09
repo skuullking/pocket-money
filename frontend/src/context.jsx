@@ -102,6 +102,12 @@ export function AppProvider({ children }) {
         fetchAppData();
       });
     });
+    socket.on('member:removed', () => fetchAppData());
+    socket.on('account:deleted', () => {
+      showToast('Ce compte a été supprimé.', 'info');
+      logout();
+      forgetFamilyMembers();
+    });
     socket.on('connect_error', () => {}); // silencieux — pas de temps réel dispo, l'app reste utilisable
 
     return () => {
@@ -217,6 +223,12 @@ export function AppProvider({ children }) {
     setExpenses([]);
   };
 
+  // Les avatars d'« Accès Rapide » ne doivent pas survivre à la suppression du compte.
+  const forgetFamilyMembers = () => {
+    setCachedFamilyMembers([]);
+    try { localStorage.removeItem(CACHED_FAMILY_KEY); } catch (e) {}
+  };
+
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3500);
@@ -228,6 +240,29 @@ export function AppProvider({ children }) {
   };
 
   // --- ACTIONS ---
+
+  const removeChild = async (childId) => {
+    try {
+      await familyAPI.removeChild(childId);
+      showToast('Enfant retiré de la famille.', 'info');
+      fetchAppData();
+    } catch (error) {
+      showToast(error.message, 'error');
+      throw error;
+    }
+  };
+
+  const deleteFamily = async (password) => {
+    try {
+      await familyAPI.deleteFamily(password);
+      clearSession();
+      forgetFamilyMembers();
+      showToast('Famille supprimée.', 'info');
+    } catch (error) {
+      showToast(error.message, 'error');
+      throw error;
+    }
+  };
 
   const addChore = async (data) => {
     try {
@@ -471,7 +506,7 @@ export function AppProvider({ children }) {
       triggerConfetti, addChore, approveChore, rejectChore, submitChore, editChore, deleteChore,
       fundGoal, withdrawFromGoal, requestExpense, approveExpense, rejectExpense,
       createRule, editRule, deleteRule, applyPenalty, updateChildSettings, updateAllowance, updateSplitSettings,
-      createChoreTemplate, updateChoreTemplate, deleteChoreTemplate,
+      createChoreTemplate, updateChoreTemplate, deleteChoreTemplate, removeChild, deleteFamily,
       toggleTheme: () => setTheme(t => t === 'dark' ? 'light' : 'dark')
     }}>
       {children}

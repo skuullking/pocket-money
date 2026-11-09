@@ -3,6 +3,9 @@ import { z } from 'zod';
 
 const MAX_AMOUNT = 1_000_000;
 const DECIMAL = /^-?\d+(\.\d+)?$/;
+// Environ 500 Ko une fois décodés. Les photos sont stockées en base : le front les
+// compresse pour tenir sous ce plafond (voir frontend/src/proofImage.js).
+const MAX_PROOF_IMAGE_CHARS = 700_000;
 
 // Les messages remontent tels quels dans les toasts du frontend (`data.error`).
 const missing = (label: string) => `Champ requis : ${label}`;
@@ -118,6 +121,10 @@ export const resetPasswordSchema = body({
   newPassword,
 });
 
+export const deleteFamilySchema = body({
+  password: z.string(typeErrors('mot de passe')).min(1, missing('mot de passe')).max(1024, invalid('mot de passe')),
+});
+
 // ── Règles ───────────────────────────────────────────────────────────────
 
 const ruleShape = {
@@ -148,7 +155,9 @@ export const submitChoreSchema = body({
   note: optionalText('note'),
   // Rendue dans un <img> côté parent : uniquement une image encodée ou une URL web.
   proofImageUrl: blankAsNull(
-    z.string(typeErrors('photo')).regex(/^(data:image\/[\w.+-]+;base64,|https?:\/\/)/i, invalid('photo')),
+    z.string(typeErrors('photo'))
+      .max(MAX_PROOF_IMAGE_CHARS, 'Photo trop volumineuse')
+      .regex(/^(data:image\/(jpeg|png|webp);base64,[a-z0-9+/]+={0,2}$|https?:\/\/)/i, invalid('photo')),
   ),
 });
 

@@ -1,11 +1,21 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AppProvider, useApp } from './context';
 
 // Import basic components
 import { Welcome, SignIn, SignUp, Splash, ForgotPassword, ResetPassword } from './screens/auth.jsx';
 import { ParentDashboard, ChoresList, ChoreDetail, CreateChore, ChildrenView, RulesScreen, PenaltyHistoryScreen, AnalyticsScreen, SettingsScreen, ExpensesReview, ChildSettingsScreen } from './screens/parent.jsx';
 import { ChildDashboard, AvailableChores, SubmitChore, MyChores, BalanceScreen, GoalsScreen, ProfileScreen, ExpensesScreen } from './screens/child.jsx';
+
+const homePath = (user) => (user.role === 'PARENT' ? '/parent' : '/child');
+
+// AppRoutes n'affiche les routes qu'une fois la session chargée : `user` est fiable ici.
+function ProtectedRoute({ role }) {
+  const { user } = useApp();
+  if (!user) return <Navigate to="/welcome" replace />;
+  if (user.role !== role) return <Navigate to={homePath(user)} replace />;
+  return <Outlet />;
+}
 
 function AppRoutes() {
   const context = useApp();
@@ -34,30 +44,34 @@ function AppRoutes() {
       <Route path="/reset-password" element={<ResetPassword />} />
       
       {/* Parent */}
-      <Route path="/parent" element={<ParentDashboard />} />
-      <Route path="/parent/chores" element={<ChoresList />} />
-      <Route path="/parent/chores/:choreId" element={<ChoreDetail />} />
-      <Route path="/parent/chores/new" element={<CreateChore />} />
-      <Route path="/parent/chores/:choreId/edit" element={<CreateChore />} />
-      <Route path="/parent/children" element={<ChildrenView />} />
-      <Route path="/parent/children/:childId/settings" element={<ChildSettingsScreen />} />
-      <Route path="/parent/rules" element={<RulesScreen />} />
-      <Route path="/parent/rules/history" element={<PenaltyHistoryScreen />} />
-      <Route path="/parent/analytics" element={<AnalyticsScreen />} />
-      <Route path="/parent/settings" element={<SettingsScreen />} />
-      <Route path="/parent/expenses" element={<ExpensesReview />} />
+      <Route element={<ProtectedRoute role="PARENT" />}>
+        <Route path="/parent" element={<ParentDashboard />} />
+        <Route path="/parent/chores" element={<ChoresList />} />
+        <Route path="/parent/chores/:choreId" element={<ChoreDetail />} />
+        <Route path="/parent/chores/new" element={<CreateChore />} />
+        <Route path="/parent/chores/:choreId/edit" element={<CreateChore />} />
+        <Route path="/parent/children" element={<ChildrenView />} />
+        <Route path="/parent/children/:childId/settings" element={<ChildSettingsScreen />} />
+        <Route path="/parent/rules" element={<RulesScreen />} />
+        <Route path="/parent/rules/history" element={<PenaltyHistoryScreen />} />
+        <Route path="/parent/analytics" element={<AnalyticsScreen />} />
+        <Route path="/parent/settings" element={<SettingsScreen />} />
+        <Route path="/parent/expenses" element={<ExpensesReview />} />
+      </Route>
 
       {/* Child */}
-      <Route path="/child" element={<ChildDashboard />} />
-      <Route path="/child/available-chores" element={<AvailableChores />} />
-      <Route path="/child/submit-chore/:choreId" element={<SubmitChore />} />
-      <Route path="/child/my-chores" element={<MyChores />} />
-      <Route path="/child/balance" element={<BalanceScreen />} />
-      <Route path="/child/goals" element={<GoalsScreen />} />
-      <Route path="/child/profile" element={<ProfileScreen />} />
-      <Route path="/child/expenses" element={<ExpensesScreen />} />
+      <Route element={<ProtectedRoute role="CHILD" />}>
+        <Route path="/child" element={<ChildDashboard />} />
+        <Route path="/child/available-chores" element={<AvailableChores />} />
+        <Route path="/child/submit-chore/:choreId" element={<SubmitChore />} />
+        <Route path="/child/my-chores" element={<MyChores />} />
+        <Route path="/child/balance" element={<BalanceScreen />} />
+        <Route path="/child/goals" element={<GoalsScreen />} />
+        <Route path="/child/profile" element={<ProfileScreen />} />
+        <Route path="/child/expenses" element={<ExpensesScreen />} />
+      </Route>
 
-      <Route path="/" element={<Navigate to={user ? (user.role === 'PARENT' ? '/parent' : '/child') : '/welcome'} replace />} />
+      <Route path="/" element={<Navigate to={user ? homePath(user) : '/welcome'} replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
