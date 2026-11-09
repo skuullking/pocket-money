@@ -14,10 +14,10 @@ interface SocketUser {
 
 let io: SocketIOServer;
 
-export function initSocket(httpServer: HttpServer): SocketIOServer {
+export function initSocket(httpServer: HttpServer, clientOrigin: string): SocketIOServer {
   io = new SocketIOServer(httpServer, {
     cors: {
-      origin: process.env.CLIENT_URL || 'http://localhost:5173',
+      origin: clientOrigin,
       methods: ['GET', 'POST'],
       credentials: true,
     },
