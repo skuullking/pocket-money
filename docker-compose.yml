@@ -51,6 +51,23 @@ services:
       # reçu d'Internet, un client ne peut donc pas usurper son IP.
       TRUST_PROXY_HOPS: 2
 
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: pocketmoney
+      PGDATABASE: pocketmoney
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - ./deploy:/deploy:ro
+      - db-backups:/backups
+    command: ["sh", "/deploy/backup.sh"]
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
@@ -70,5 +87,6 @@ services:
 
 volumes:
   db-data:
+  db-backups:
   caddy-data:
   caddy-config:

@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Exécutés sous Linux, même depuis un checkout Windows.
+*.sh text eol=lf
