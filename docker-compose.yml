@@ -20,8 +20,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    ports:
-      - "80:80"
+    # Seul Caddy est exposé : il termine le HTTPS devant nginx.
+    expose:
+      - "80"
     environment:
       # schema.prisma declares provider = "postgresql" — this must stay a
       # postgresql:// URL, not a SQLite file: path (see QA_BUG_REPORT.md, ENV-1).
@@ -29,9 +30,28 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET manquant, voir .env.production.example}
       JWT_EXPIRES_IN: 7d
       PORT: 3001
-      CLIENT_URL: ${CLIENT_URL:?CLIENT_URL manquant, voir .env.production.example}
-      # nginx, dans ce conteneur, est le seul proxy devant l'API.
-      TRUST_PROXY_HOPS: 1
+      CLIENT_URL: https://${DOMAIN:?DOMAIN manquant, voir .env.production.example}
+      # Caddy puis nginx : deux proxys devant l'API. Caddy ignore le X-Forwarded-For
+      # reçu d'Internet, un client ne peut donc pas usurper son IP.
+      TRUST_PROXY_HOPS: 2
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN manquant, voir .env.production.example}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
 
 volumes:
   db-data:
+  caddy-data:
+  caddy-config:
