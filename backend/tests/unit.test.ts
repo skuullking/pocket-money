@@ -143,6 +143,7 @@ describe('configuration de démarrage', () => {
 
   it('refuse de démarrer en production sans CLIENT_URL', async () => {
     vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('JWT_SECRET', 'a1'.repeat(32));
     vi.stubEnv('CLIENT_URL', '');
     await expect(importServer()).rejects.toThrow(/CLIENT_URL/);
   });
@@ -164,9 +165,12 @@ describe('configuration de démarrage', () => {
 });
 
 describe('assertStrongSecret', () => {
-  it.each(['change-me-in-production', 'your-super-secret-jwt-key-change-in-production', 'court'])('refuse %s', value => {
-    expect(() => assertStrongSecret('JWT_SECRET', value)).toThrow();
-  });
+  it.each(['change-me-in-production', 'your-super-secret-jwt-key-change-in-production', 'court'])(
+    'refuse %s',
+    value => {
+      expect(() => assertStrongSecret('JWT_SECRET', value)).toThrow();
+    },
+  );
 
   it('accepte un secret généré', () => {
     expect(() => assertStrongSecret('JWT_SECRET', 'a1'.repeat(32))).not.toThrow();
