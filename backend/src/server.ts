@@ -108,8 +108,15 @@ app.get('/', (req, res) => {
 });
  
 // ── Health Check ──────────────────────────────────────────────────────────
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// Vérifie aussi la base : sans elle l'instance ne peut servir aucune requête utile.
+app.get('/api/health', async (req, res) => {
+  const timestamp = new Date().toISOString();
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'ok', timestamp });
+  } catch {
+    res.status(503).json({ status: 'unavailable', timestamp });
+  }
 });
 
 // ── Helpers & Middlewares ──────────────────────────────────────────────────

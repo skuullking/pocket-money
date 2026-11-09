@@ -20,6 +20,13 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # Passe par nginx puis l'API puis la base : toute la chaîne est vérifiée.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     # Seul Caddy est exposé : il termine le HTTPS devant nginx.
     expose:
       - "80"
@@ -39,7 +46,8 @@ services:
     image: caddy:2-alpine
     restart: unless-stopped
     depends_on:
-      - app
+      app:
+        condition: service_healthy
     ports:
       - "80:80"
       - "443:443"
