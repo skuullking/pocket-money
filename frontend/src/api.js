@@ -3,16 +3,15 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 export const SOCKET_URL = API_BASE_URL.replace(/\/api\/?$/, '') || undefined;
 
 const fetchAPI = async (endpoint, options = {}) => {
-  const token = localStorage.getItem('token');
   const headers = {
     'Content-Type': 'application/json',
-    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
     ...options.headers,
   };
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
     headers,
+    credentials: 'include',
   });
 
   const data = await response.json();
@@ -50,6 +49,7 @@ export const authAPI = {
     body: JSON.stringify(data),
   }),
   getMe: () => fetchAPI('/auth/me'),
+  logout: () => fetchAPI('/auth/logout', { method: 'POST' }),
 };
 
 export const familyAPI = {

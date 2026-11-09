@@ -7,6 +7,7 @@ import { PrismaClient } from '@prisma/client';
 import { createServer } from 'http';
 import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
+import { AUTH_COOKIE, readAuthCookie } from './authCookie';
 import { initSocket, emitToFamily, emitToUser, SocketEvents } from './socket';
 import {
   allowanceSchema, applyRuleSchema, approveExpenseSchema, childSettingsSchema, createChoreSchema,
@@ -65,7 +66,35 @@ const TRUST_PROXY_HOPS = (() => {
 })();
 app.set('trust proxy', TRUST_PROXY_HOPS);
 
-app.use(cors({ origin: CLIENT_ORIGIN }));
+// Le JWT vit dans un cookie httpOnly, hors de portée d'un script injecté. Secure
+// suit le protocole du front, pour que le déploiement HTTP local reste possible.
+const COOKIE_SECURE = CLIENT_ORIGIN.startsWith('https://');
+const COOKIE_SAMESITE = (() => {
+  const sameSite = process.env.COOKIE_SAMESITE ?? 'lax';
+  if (sameSite !== 'lax' && sameSite !== 'strict' && sameSite !== 'none') {
+    throw new Error('COOKIE_SAMESITE must be lax, strict or none.');
+  }
+  if (sameSite === 'none' && !COOKIE_SECURE) {
+    throw new Error('COOKIE_SAMESITE=none requires an https:// CLIENT_URL: browsers reject it otherwise.');
+  }
+  return sameSite as 'lax' | 'strict' | 'none';
+})();
+const AUTH_COOKIE_OPTIONS = { httpOnly: true, secure: COOKIE_SECURE, sameSite: COOKIE_SAMESITE, path: '/' };
+const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // aligné sur l'expiration du JWT
+
+app.use(cors({ origin: CLIENT_ORIGIN, credentials: true }));
+
+// Le navigateur joint le cookie tout seul : on refuse les écritures venant d'un
+// autre site (CSRF), y compris si SameSite=None. Sans en-tête Origin, la requête
+// ne vient pas d'un navigateur en cross-site et ne porte donc pas le cookie d'une victime.
+app.use('/api', (req, res, next) => {
+  const { origin } = req.headers;
+  if (origin && origin !== CLIENT_ORIGIN && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+    return res.status(403).json({ error: 'Origine non autorisée' });
+  }
+  next();
+});
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
@@ -81,6 +110,10 @@ app.get('/api/health', (req, res) => {
 // ── Helpers & Middlewares ──────────────────────────────────────────────────
 const generateToken = (userId: string) => {
   return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' });
+};
+
+const setAuthCookie = (res: any, userId: string) => {
+  res.cookie(AUTH_COOKIE, generateToken(userId), { ...AUTH_COOKIE_OPTIONS, maxAge: SESSION_MAX_AGE_MS });
 };
 
 // Envoi d'email : bascule automatiquement sur un fournisseur réel dès que
@@ -184,8 +217,7 @@ const applySplit = async (tx: any, childId: string, amount: number) => {
 };
 
 const authenticateToken = async (req: any, res: any, next: any) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const token = readAuthCookie(req.headers.cookie);
   if (!token) return res.status(401).json({ error: 'Access denied' });
   try {
     const verified: any = jwt.verify(token, JWT_SECRET);
@@ -255,8 +287,8 @@ app.post('/api/auth/register/parent/create', registerLimiter, async (req, res) =
       }
     });
 
-    const token = generateToken(user.id);
-    res.status(201).json({ token, user: { id: user.id, name: user.name, role: user.role, familyId: user.familyId, balance: user.balance, monthDelta: user.monthDelta, avatar: user.avatar, color: user.color } });
+    setAuthCookie(res, user.id);
+    res.status(201).json({ user: { id: user.id, name: user.name, role: user.role, familyId: user.familyId, balance: user.balance, monthDelta: user.monthDelta, avatar: user.avatar, color: user.color } });
   } catch (error: any) {
     sendRegisterError(error, res);
   }
@@ -273,8 +305,8 @@ app.post('/api/auth/register/parent/join', registerLimiter, async (req, res) => 
     const user = await prisma.user.create({
       data: { name, email, password: hashedPassword, role: 'PARENT', familyId: family.id }
     });
-    const token = generateToken(user.id);
-    res.status(201).json({ token, user: { id: user.id, name: user.name, role: user.role, familyId: user.familyId, balance: user.balance, monthDelta: user.monthDelta, avatar: user.avatar, color: user.color } });
+    setAuthCookie(res, user.id);
+    res.status(201).json({ user: { id: user.id, name: user.name, role: user.role, familyId: user.familyId, balance: user.balance, monthDelta: user.monthDelta, avatar: user.avatar, color: user.color } });
   } catch (error: any) { sendRegisterError(error, res); }
 });
 
@@ -292,8 +324,8 @@ app.post('/api/auth/register/child', registerLimiter, async (req, res) => {
         age, avatar: name.charAt(0).toUpperCase(), color: '#835500'
       }
     });
-    const token = generateToken(user.id);
-    res.status(201).json({ token, user: { id: user.id, name: user.name, role: user.role, familyId: user.familyId, balance: user.balance, monthDelta: user.monthDelta, avatar: user.avatar, color: user.color, age: user.age } });
+    setAuthCookie(res, user.id);
+    res.status(201).json({ user: { id: user.id, name: user.name, role: user.role, familyId: user.familyId, balance: user.balance, monthDelta: user.monthDelta, avatar: user.avatar, color: user.color, age: user.age } });
   } catch (error: any) { sendRegisterError(error, res); }
 });
 
@@ -307,9 +339,15 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
       ? await prisma.user.findFirst({ where: { name: email, role: 'CHILD', family: { inviteCode } } })
       : await prisma.user.findUnique({ where: { email } });
     if (!user || !(await bcrypt.compare(password, user.password))) return res.status(401).json({ error: 'Identifiants invalides' });
-    const token = generateToken(user.id);
-    res.json({ token, user: { id: user.id, name: user.name, role: user.role, familyId: user.familyId, balance: user.balance, monthDelta: user.monthDelta, avatar: user.avatar, color: user.color, age: user.age } });
+    setAuthCookie(res, user.id);
+    res.json({ user: { id: user.id, name: user.name, role: user.role, familyId: user.familyId, balance: user.balance, monthDelta: user.monthDelta, avatar: user.avatar, color: user.color, age: user.age } });
   } catch (error: any) { res.status(400).json({ error: error.message }); }
+});
+
+// Le cookie httpOnly est invisible pour le front : seul le serveur peut l'effacer.
+app.post('/api/auth/logout', (req, res) => {
+  res.clearCookie(AUTH_COOKIE, AUTH_COOKIE_OPTIONS);
+  res.json({ success: true });
 });
 
 app.get('/api/auth/me', authenticateToken, (req: any, res) => {

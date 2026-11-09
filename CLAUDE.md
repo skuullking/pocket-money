@@ -28,12 +28,12 @@ No linting or test runner is configured.
 
 ## Architecture
 
-**PocketMoney** is a React 18 + Vite SPA connected to a Node.js/Express backend. Parents assign chores, children earn allowances. Auth via JWT stored in `localStorage`.
+**PocketMoney** is a React 18 + Vite SPA connected to a Node.js/Express backend. Parents assign chores, children earn allowances. Auth via JWT stored in an httpOnly cookie.
 
 ### State Management
 
 `frontend/src/context.jsx` is the single source of truth via React Context (`AppProvider`). It holds:
-- `user`, `token`, `loading` — auth state (fetched from `GET /api/auth/me`)
+- `user`, `loading` — auth state (fetched from `GET /api/auth/me`)
 - `family`, `chores`, `goals`, `transactions` — fetched on login via `fetchAppData()`
 - Action handlers: `addChore`, `approveChore`, `rejectChore`, `submitChore`, `fundGoal`, `updateRules`, `applyPenalty`
 

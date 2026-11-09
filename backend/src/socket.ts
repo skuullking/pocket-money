@@ -2,6 +2,7 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import { Server as HttpServer } from 'http';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
+import { readAuthCookie } from './authCookie';
 
 const prisma = new PrismaClient();
 
@@ -21,10 +22,16 @@ export function initSocket(httpServer: HttpServer, clientOrigin: string): Socket
       methods: ['GET', 'POST'],
       credentials: true,
     },
+    // CORS ne s'applique pas aux WebSockets : sans ce contrôle, un autre site
+    // pourrait ouvrir une connexion authentifiée par le cookie de la victime.
+    allowRequest: (req, callback) => {
+      const { origin } = req.headers;
+      callback(null, !origin || origin === clientOrigin);
+    },
   });
 
   io.use(async (socket: Socket, next) => {
-    const token = socket.handshake.auth?.token as string | undefined;
+    const token = readAuthCookie(socket.handshake.headers.cookie);
     if (!token) return next(new Error('Authentication error: no token'));
 
     try {

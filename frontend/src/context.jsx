@@ -22,13 +22,6 @@ const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(() => {
-    try {
-      return typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    } catch (e) {
-      return null;
-    }
-  });
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
   const [showConfetti, setShowConfetti] = useState(false);
@@ -77,19 +70,12 @@ export function AppProvider({ children }) {
   }, [theme]);
 
   useEffect(() => {
-    if (token) {
-      try {
-        localStorage.setItem('token', token);
-      } catch (e) {}
-      fetchUser();
-    } else {
-      try {
-        localStorage.removeItem('token');
-      } catch (e) {}
-      setUser(null);
-      setLoading(false);
-    }
-  }, [token]);
+    // La session est dans un cookie httpOnly : on purge l'ancien JWT de localStorage.
+    try {
+      localStorage.removeItem('token');
+    } catch (e) {}
+    fetchUser();
+  }, []);
 
   useEffect(() => {
     if (user) fetchAppData();
@@ -100,14 +86,14 @@ export function AppProvider({ children }) {
   // voir server.ts) — se connecte simplement pas si le serveur n'écoute pas.
   const socketRef = useRef(null);
   useEffect(() => {
-    if (!user || !token) {
+    if (!user) {
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
       }
       return;
     }
-    const socket = io(SOCKET_URL, { auth: { token }, reconnectionAttempts: 5 });
+    const socket = io(SOCKET_URL, { withCredentials: true, reconnectionAttempts: 5 });
     socketRef.current = socket;
     Object.keys(SOCKET_TOAST_MESSAGES).forEach(event => {
       socket.on(event, () => {
@@ -122,7 +108,7 @@ export function AppProvider({ children }) {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [user?.id, token]);
+  }, [user?.id]);
 
   const fetchUser = async () => {
     try {
@@ -130,7 +116,7 @@ export function AppProvider({ children }) {
       const data = await authAPI.getMe();
       setUser(data.user);
     } catch (error) {
-      logout();
+      clearSession();
     } finally {
       setLoading(false);
     }
@@ -173,7 +159,7 @@ export function AppProvider({ children }) {
     try {
       const data = await authAPI.login(credentials);
       setUser(data.user);
-      setToken(data.token);
+      fetchUser();
       return data;
     } catch (error) {
       showToast(error.message, 'error');
@@ -185,7 +171,7 @@ export function AppProvider({ children }) {
     try {
       const res = await authAPI.registerParentCreate(data);
       setUser(res.user);
-      setToken(res.token);
+      fetchUser();
       return res;
     } catch (error) {
       showToast(error.message, 'error');
@@ -197,7 +183,7 @@ export function AppProvider({ children }) {
     try {
       const res = await authAPI.registerParentJoin(data);
       setUser(res.user);
-      setToken(res.token);
+      fetchUser();
       return res;
     } catch (error) {
       showToast(error.message, 'error');
@@ -209,7 +195,7 @@ export function AppProvider({ children }) {
     try {
       const res = await authAPI.registerChild(data);
       setUser(res.user);
-      setToken(res.token);
+      fetchUser();
       return res;
     } catch (error) {
       showToast(error.message, 'error');
@@ -218,7 +204,11 @@ export function AppProvider({ children }) {
   };
 
   const logout = () => {
-    setToken(null);
+    authAPI.logout().catch(() => {});
+    clearSession();
+  };
+
+  const clearSession = () => {
     setUser(null);
     setFamily(null);
     setChores([]);
@@ -475,7 +465,7 @@ export function AppProvider({ children }) {
 
   return (
     <AppContext.Provider value={{
-      user, token, loading, theme, toast, showConfetti, family, chores, goals, transactions, expenses, choreTemplates,
+      user, loading, theme, toast, showConfetti, family, chores, goals, transactions, expenses, choreTemplates,
       cachedFamilyMembers,
       login, registerParentCreate, registerParentJoin, registerChild, logout, showToast,
       triggerConfetti, addChore, approveChore, rejectChore, submitChore, editChore, deleteChore,
