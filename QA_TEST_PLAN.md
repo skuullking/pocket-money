@@ -88,3 +88,27 @@ Seule exception volontaire : `COSMETIC-4` (écran Statistiques statique) a été
 laissé tel quel — ce n'est pas un bug d'affichage mais un message "bientôt
 disponible" assumé ; en faire un vrai écran de stats est une fonctionnalité à
 part entière, pas un correctif.
+
+## 6. Troisième passage (préparation à la mise en production)
+
+Le plan de la section 2 a été rejoué sur le **build de production** du frontend
+(`vite build` puis `vite preview`) avec une API réelle et PostgreSQL, en desktop
+(1440×900) et en mobile (iPhone 13). Il est désormais versionné et rejouable :
+
+```bash
+cd e2e
+npm test
+```
+
+`e2e/tests/qa-plan.spec.js` couvre les parcours qui n'étaient testés nulle part
+(rejoindre une famille, recherche, édition des règles, statistiques, paramètres,
+écrans enfant), ainsi que les ajouts : mot de passe enfant, consentement, export et
+suppression de compte. `accessibility.spec.js` passe axe (WCAG 2.1 AA) sur tous
+les écrans, en thème clair et sombre.
+
+Anomalie trouvée et corrigée : les liens vers les CGU, dans le formulaire
+d'inscription, quittaient la page et effaçaient la saisie. Ils ouvrent maintenant
+un nouvel onglet.
+
+Non couvert par ce passage : la pile `docker compose` complète (nginx, Caddy,
+certificat, sauvegardes, envoi réel par Resend). À rejouer sur le serveur cible.
