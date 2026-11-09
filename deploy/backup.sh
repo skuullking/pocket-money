@@ -12,6 +12,11 @@ while true; do
   else
     rm -f "$target.tmp"
     echo "backup FAILED: $target" >&2
+    if [ -n "${ALERT_WEBHOOK_URL:-}" ]; then
+      wget -q -O /dev/null --header='Content-Type: application/json' \
+        --post-data='{"text":"PocketMoney : sauvegarde en échec.","content":"PocketMoney : sauvegarde en échec."}' \
+        "$ALERT_WEBHOOK_URL" || true
+    fi
   fi
   sleep 86400
 done
