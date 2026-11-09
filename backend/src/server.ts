@@ -173,6 +173,20 @@ const appDate = (date: Date) => {
 const utcMidnight = (dateStr: string) => new Date(`${dateStr}T00:00:00Z`);
 const daysBetween = (from: string, to: string) => Math.round((utcMidnight(to).getTime() - utcMidnight(from).getTime()) / 86_400_000);
 
+// Variation du solde depuis le début du mois calendaire, recalculée depuis les
+// transactions : chaque mouvement du solde en crée une. 32 jours couvrent le mois
+// en cours quel que soit le fuseau ; le tri exact se fait sur la date locale.
+const monthDeltaOf = async (userId: string) => {
+  const now = new Date();
+  const month = appDate(now).slice(0, 7);
+  const recent = await prisma.transaction.findMany({
+    where: { childId: userId, date: { gte: new Date(now.getTime() - 32 * 86_400_000) } },
+    select: { amount: true, date: true },
+  });
+  const total = recent.filter(t => appDate(t.date).startsWith(month)).reduce((sum, t) => sum + t.amount, 0);
+  return Math.round(total * 100) / 100;
+};
+
 // Argent de poche récurrent : évalué "paresseusement" (pas de node-cron — ne
 // survivrait pas au déploiement serverless Vercel). Appelé à chaque
 // chargement de GET /api/family : crédite tout paiement dû depuis la
@@ -372,7 +386,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
       : await prisma.user.findUnique({ where: { email } });
     if (!user || !(await bcrypt.compare(password, user.password))) return res.status(401).json({ error: 'Identifiants invalides' });
     setAuthCookie(res, user.id);
-    res.json({ user: { id: user.id, name: user.name, role: user.role, familyId: user.familyId, balance: user.balance, monthDelta: user.monthDelta, avatar: user.avatar, color: user.color, age: user.age } });
+    res.json({ user: { id: user.id, name: user.name, role: user.role, familyId: user.familyId, balance: user.balance, monthDelta: await monthDeltaOf(user.id), avatar: user.avatar, color: user.color, age: user.age } });
   } catch (error: any) { res.status(400).json({ error: error.message }); }
 });
 
@@ -382,9 +396,11 @@ app.post('/api/auth/logout', (req, res) => {
   res.json({ success: true });
 });
 
-app.get('/api/auth/me', authenticateToken, (req: any, res) => {
+app.get('/api/auth/me', authenticateToken, async (req: any, res) => {
   const u = req.user;
-  res.json({ user: { id: u.id, name: u.name, role: u.role, familyId: u.familyId, balance: u.balance, monthDelta: u.monthDelta, saveBalance: u.saveBalance, spendBalance: u.spendBalance, giveBalance: u.giveBalance, avatar: u.avatar, color: u.color, age: u.age, settings: u.settings } });
+  try {
+    res.json({ user: { id: u.id, name: u.name, role: u.role, familyId: u.familyId, balance: u.balance, monthDelta: await monthDeltaOf(u.id), saveBalance: u.saveBalance, spendBalance: u.spendBalance, giveBalance: u.giveBalance, avatar: u.avatar, color: u.color, age: u.age, settings: u.settings } });
+  } catch (error: any) { res.status(400).json({ error: error.message }); }
 });
 
 // ── Récupération de mot de passe ─────────────────────────────────────────
@@ -441,7 +457,7 @@ app.get('/api/family', authenticateToken, async (req: any, res) => {
   const family = await prisma.family.findUnique({
     where: { id: req.user.familyId },
     include: {
-      users: { select: { id: true, name: true, role: true, avatar: true, color: true, balance: true, age: true, monthDelta: true, settings: true } },
+      users: { select: { id: true, name: true, role: true, avatar: true, color: true, balance: true, age: true, settings: true } },
       rules: true
     }
   });

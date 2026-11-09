@@ -5,6 +5,7 @@ import {
   anonymous,
   as,
   createFamily,
+  daysAgo,
   nextIp,
   ORIGIN,
   PASSWORD,
@@ -236,6 +237,40 @@ describe('session', () => {
   it('la déconnexion efface le cookie', async () => {
     const res = await anonymous().post('/api/auth/logout').expect(200);
     expect(cookieOf(res)).toMatch(/^pm_session=;/);
+  });
+});
+
+describe('variation du solde sur le mois (COSMETIC-2)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const addTransaction = (childId: string, amount: number, date: Date) =>
+    prisma.transaction.create({ data: { childId, amount, type: 'CHORE', description: 'Test', date } });
+
+  it('additionne les transactions du mois et ignore la colonne figée', async () => {
+    const { family, child } = await createFamily();
+    await prisma.user.update({ where: { id: child.id }, data: { monthDelta: 99 } });
+    await addTransaction(child.id, 12.5, new Date());
+    await addTransaction(child.id, -2.25, new Date());
+    await addTransaction(child.id, 40, daysAgo(40));
+
+    expect((await as(child).get('/api/auth/me').expect(200)).body.user.monthDelta).toBe(10.25);
+    const login = await anonymous()
+      .post('/api/auth/login')
+      .send({ email: child.name, inviteCode: family.inviteCode, password: PASSWORD })
+      .expect(200);
+    expect(login.body.user.monthDelta).toBe(10.25);
+  });
+
+  it("découpe les mois dans le fuseau de l'application", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-02-28T23:30:00Z')); // déjà le 1er mars à Paris
+    const { child } = await createFamily();
+    await addTransaction(child.id, 3, new Date('2026-02-28T23:10:00Z')); // 1er mars, 00:10
+    await addTransaction(child.id, 50, new Date('2026-02-28T22:50:00Z')); // 28 février, 23:50
+
+    expect((await as(child).get('/api/auth/me').expect(200)).body.user.monthDelta).toBe(3);
   });
 });
 

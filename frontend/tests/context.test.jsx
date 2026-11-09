@@ -146,6 +146,45 @@ describe('session', () => {
   });
 });
 
+describe('fraîcheur du solde affiché', () => {
+  it('reprend le solde du serveur après un mouvement', async () => {
+    await mount(alice);
+    api.goalsAPI.fundGoal.mockResolvedValue({});
+    api.authAPI.getMe.mockResolvedValue({ user: { ...alice, balance: alice.balance - 5, monthDelta: -5 } });
+    await run(() => app.fundGoal('g1', 5));
+    await waitFor(() => expect(app.user.balance).toBe(alice.balance - 5));
+    expect(app.user.monthDelta).toBe(-5);
+  });
+
+  it('reprend le solde du serveur sur un événement temps réel', async () => {
+    await mount(alice);
+    api.authAPI.getMe.mockResolvedValue({ user: { ...alice, balance: alice.balance + 3 } });
+    await run(() => socketHandlers['chore:approved']());
+    await waitFor(() => expect(app.user.balance).toBe(alice.balance + 3));
+  });
+
+  it('ne recharge pas les données en boucle', async () => {
+    await mount(alice);
+    await waitFor(() => expect(app.transactions).toEqual([{ id: 't1' }]));
+    expect(api.familyAPI.getFamily).toHaveBeenCalledTimes(1);
+  });
+
+  it('une réponse tardive ne reconnecte pas après une déconnexion', async () => {
+    await mount(alice);
+    let answer;
+    api.authAPI.getMe.mockReturnValue(
+      new Promise(resolve => {
+        answer = resolve;
+      }),
+    );
+    api.goalsAPI.fundGoal.mockResolvedValue({});
+    await run(() => app.fundGoal('g1', 5));
+    await run(() => app.logout());
+    await run(async () => answer({ user: alice }));
+    expect(app.user).toBeNull();
+  });
+});
+
 describe('garde-fous sur les montants (MONEY-3)', () => {
   it.each([[0], [-5], ['-5'], ['abc'], [''], [null], [NaN]])("fundGoal refuse %j sans appeler l'API", async amount => {
     await mount(alice);
