@@ -20,6 +20,11 @@ backend/prisma/*.db-journal
 .vite/
 frontend/.vite/
 
+# Tests
+coverage/
+e2e/test-results/
+e2e/playwright-report/
+
 # Editor / OS
 .obsidian/
 .DS_Store
