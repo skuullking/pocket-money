@@ -29,6 +29,7 @@ const KID_PALETTE = [
 export function ChildDashboard() {
   const navigate = useNavigate();
   const { user, chores, goals, transactions, loading } = useApp();
+  const animBalance = useCountUp(user?.balance ?? 0, 900);
 
   if (loading || !user) {
     return (
@@ -40,7 +41,6 @@ export function ChildDashboard() {
     );
   }
 
-  const animBalance = useCountUp(user?.balance ?? 0, 900);
   const myChores = (chores || []).filter(c => c.assigneeId === user.id);
   const available = myChores.filter(c => c.status === 'PENDING' || c.status === 'pending');
   const myGoals = (goals || []).filter(g => g.participants?.some(p => p.childId === user.id) || g.childId === user.id);
@@ -394,11 +394,11 @@ export function GoalsScreen() {
                    <ProgressBar value={goal.current} max={goal.target} color="success" height="lg" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <Btn variant="secondary" className="h-12" onClick={() => {
+                  <Btn variant="secondary" className="h-12" disabled={goal.status === 'COMPLETED'} onClick={() => {
                     const amount = window.prompt("Combien souhaites-tu épargner ?");
                     if (amount) fundGoal(goal.id, amount);
                   }}>Ajouter des pièces</Btn>
-                  <Btn variant="outline" className="h-12" disabled={!goal.current} onClick={() => {
+                  <Btn variant="outline" className="h-12" disabled={!goal.current || goal.status === 'COMPLETED'} onClick={() => {
                     const amount = window.prompt("Combien souhaites-tu retirer ?");
                     if (amount) withdrawFromGoal(goal.id, amount);
                   }}>Retirer</Btn>
@@ -453,6 +453,8 @@ export function ExpensesScreen() {
       await requestExpense({ ...form, amount: parseFloat(form.amount) || 0 });
       setForm({ title: '', description: '', amount: '', expenseType: 'ONLINE', reference: '' });
       setModalOpen(false);
+    } catch {
+      // requestExpense a déjà affiché le refus : le formulaire reste ouvert.
     } finally {
       setBusy(false);
     }

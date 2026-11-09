@@ -22,9 +22,21 @@ npm run preview  # Preview production build
 # Backend
 cd backend
 npm run dev      # Start Express API (http://localhost:3001)
+
+# Quality (backend and frontend)
+npm test              # Vitest (backend: real Postgres, started automatically)
+npm run test:coverage
+npm run lint          # ESLint
+npm run typecheck
+npm run format:check  # Prettier, tests and config only (source not reformatted yet)
+
+# End-to-end (Playwright, desktop + mobile, production build)
+cd e2e
+npx playwright install chromium   # once
+npm test
 ```
 
-No linting or test runner is configured.
+Backend and e2e tests start a disposable embedded Postgres; set `TEST_DATABASE_URL` to use an existing server (CI does). Its database name must contain `test`, because every table gets wiped.
 
 ## Architecture
 

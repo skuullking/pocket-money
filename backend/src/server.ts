@@ -138,10 +138,14 @@ const sendPasswordResetEmail = async (to: string, resetUrl: string) => {
   });
 };
 
+// Sérialise les lecture-puis-écriture sur un compte jusqu'à la fin de la transaction.
+const lockUser = (tx: any, id: string) => tx.$queryRaw`SELECT id FROM "User" WHERE id = ${id} FOR UPDATE`;
+
 // Balance must never go below 0 (see backend/PLAN.md "Règle d'Or"). Deducts up to
 // `amount` from a child's balance, clamping at 0, and returns how much was actually
 // taken so the caller can record an accurate transaction and warn if it was capped.
 const clampedDeduct = async (tx: any, childId: string, amount: number) => {
+  await lockUser(tx, childId);
   const user = await tx.user.findUnique({ where: { id: childId } });
   if (!user) throw new Error('Utilisateur introuvable');
   const actual = Math.min(amount, user.balance);
@@ -810,6 +814,8 @@ app.post('/api/goals', authenticateToken, async (req: any, res) => {
   res.status(201).json({ goal });
 });
 
+const GOAL_ALREADY_BOUGHT = 'Cet objectif est déjà acheté';
+
 app.post('/api/goals/:id/fund', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'CHILD') return res.status(403).json({ error: 'Réservé aux enfants' });
   const body = parseBody(goalAmountSchema, req, res);
@@ -821,20 +827,34 @@ app.post('/api/goals/:id/fund', authenticateToken, async (req: any, res) => {
     if (!goal || goal.familyId !== req.user.familyId) return res.status(404).json({ error: 'Objectif introuvable' });
     const isParticipant = goal.participants.some(p => p.childId === req.user.id);
     if (!goal.isShared && !isParticipant) return res.status(403).json({ error: "Cet objectif n'est pas partagé avec toi" });
-    if (req.user.balance < val) return res.status(400).json({ error: 'Solde insuffisant' });
 
-    const [updatedGoal, updatedUser] = await prisma.$transaction([
-      prisma.goal.update({ where: { id: req.params.id }, data: { current: { increment: val } } }),
-      prisma.user.update({ where: { id: req.user.id }, data: { balance: { decrement: val } } }),
-      prisma.transaction.create({
+    // Une erreur levée annule toute la transaction ; le catch la renvoie en 400.
+    const { updatedGoal, updatedUser } = await prisma.$transaction(async (tx: any) => {
+      // Le statut et le solde sont dans le `where` : de deux requêtes simultanées,
+      // la seconde voit le solde déjà débité. Toujours l'objectif avant le compte.
+      const funded = await tx.goal.updateMany({
+        where: { id: goal.id, status: 'IN_PROGRESS' },
+        data: { current: { increment: val } },
+      });
+      if (funded.count !== 1) throw new Error(GOAL_ALREADY_BOUGHT);
+      const debited = await tx.user.updateMany({
+        where: { id: req.user.id, balance: { gte: val } },
+        data: { balance: { decrement: val } },
+      });
+      if (debited.count !== 1) throw new Error('Solde insuffisant');
+      await tx.transaction.create({
         data: { childId: req.user.id, amount: -val, type: 'GOAL_FUNDING', description: `Épargne pour objectif` }
-      }),
-      prisma.goalParticipant.upsert({
-        where: { goalId_childId: { goalId: req.params.id, childId: req.user.id } },
+      });
+      await tx.goalParticipant.upsert({
+        where: { goalId_childId: { goalId: goal.id, childId: req.user.id } },
         update: { contributedAmount: { increment: val } },
-        create: { goalId: req.params.id, childId: req.user.id, contributedAmount: val }
-      })
-    ]);
+        create: { goalId: goal.id, childId: req.user.id, contributedAmount: val }
+      });
+      return {
+        updatedGoal: await tx.goal.findUniqueOrThrow({ where: { id: goal.id } }),
+        updatedUser: await tx.user.findUniqueOrThrow({ where: { id: req.user.id } }),
+      };
+    });
     emitToFamily(req.user.familyId, SocketEvents.GOAL_FUNDED, updatedGoal);
     res.json({ goal: updatedGoal, balance: updatedUser.balance });
   } catch (error: any) { res.status(400).json({ error: error.message }); }
@@ -849,22 +869,33 @@ app.post('/api/goals/:id/withdraw', authenticateToken, async (req: any, res) => 
   try {
     const goal = await prisma.goal.findUnique({ where: { id: req.params.id }, include: { participants: true } });
     if (!goal || goal.familyId !== req.user.familyId) return res.status(404).json({ error: 'Objectif introuvable' });
-    const participant = goal.participants.find(p => p.childId === req.user.id);
-    if (!participant) return res.status(403).json({ error: "Tu n'as rien épargné sur cet objectif" });
-    const refund = Math.min(val, participant.contributedAmount, goal.current);
-    if (refund <= 0) return res.status(400).json({ error: 'Rien à retirer' });
+    if (!goal.participants.some(p => p.childId === req.user.id)) {
+      return res.status(403).json({ error: "Tu n'as rien épargné sur cet objectif" });
+    }
 
-    const [updatedGoal, updatedUser] = await prisma.$transaction([
-      prisma.goal.update({ where: { id: req.params.id }, data: { current: { decrement: refund } } }),
-      prisma.user.update({ where: { id: req.user.id }, data: { balance: { increment: refund } } }),
-      prisma.transaction.create({
+    const { updatedGoal, updatedUser } = await prisma.$transaction(async (tx: any) => {
+      // Le verrou garantit que le plafond ci-dessous est calculé sur des montants à jour.
+      await tx.$queryRaw`SELECT id FROM "Goal" WHERE id = ${goal.id} FOR UPDATE`;
+      const current = await tx.goal.findUniqueOrThrow({ where: { id: goal.id } });
+      if (current.status !== 'IN_PROGRESS') throw new Error(GOAL_ALREADY_BOUGHT);
+      const participant = await tx.goalParticipant.findUniqueOrThrow({
+        where: { goalId_childId: { goalId: goal.id, childId: req.user.id } },
+      });
+      const refund = Math.min(val, participant.contributedAmount, current.current);
+      if (refund <= 0) throw new Error('Rien à retirer');
+
+      await tx.goalParticipant.update({
+        where: { id: participant.id },
+        data: { contributedAmount: { decrement: refund } },
+      });
+      await tx.transaction.create({
         data: { childId: req.user.id, amount: refund, type: 'GOAL_WITHDRAWAL', description: `Retrait depuis un objectif` }
-      }),
-      prisma.goalParticipant.update({
-        where: { goalId_childId: { goalId: req.params.id, childId: req.user.id } },
-        data: { contributedAmount: { decrement: refund } }
-      })
-    ]);
+      });
+      return {
+        updatedGoal: await tx.goal.update({ where: { id: goal.id }, data: { current: { decrement: refund } } }),
+        updatedUser: await tx.user.update({ where: { id: req.user.id }, data: { balance: { increment: refund } } }),
+      };
+    });
     res.json({ goal: updatedGoal, balance: updatedUser.balance });
   } catch (error: any) { res.status(400).json({ error: error.message }); }
 });
@@ -874,9 +905,13 @@ app.put('/api/goals/:id/buy', authenticateToken, async (req: any, res) => {
   try {
     const goal = await prisma.goal.findUnique({ where: { id: req.params.id } });
     if (!goal || goal.familyId !== req.user.familyId) return res.status(404).json({ error: 'Objectif introuvable' });
-    if (goal.current < goal.target) return res.status(400).json({ error: "L'objectif n'est pas encore atteint" });
-    const updatedGoal = await prisma.goal.update({ where: { id: req.params.id }, data: { status: 'COMPLETED' } });
-    res.json({ goal: updatedGoal });
+    // Le montant est dans le `where` : un retrait simultané ne peut pas invalider l'achat.
+    const { count } = await prisma.goal.updateMany({
+      where: { id: goal.id, current: { gte: goal.target } },
+      data: { status: 'COMPLETED' },
+    });
+    if (count !== 1) return res.status(400).json({ error: "L'objectif n'est pas encore atteint" });
+    res.json({ goal: await prisma.goal.findUniqueOrThrow({ where: { id: goal.id } }) });
   } catch (error: any) { res.status(400).json({ error: error.message }); }
 });
 
@@ -996,8 +1031,10 @@ app.post('/api/rules/:id/apply', authenticateToken, async (req: any, res) => {
   if (!body) return;
   const { childId } = body;
   try {
-    const rule = await prisma.rule.findUnique({ where: { id: req.params.id } });
+    const rule = await prisma.rule.findFirst({ where: { id: req.params.id, familyId: req.user.familyId } });
     if (!rule) return res.status(404).json({ error: 'Règle non trouvée' });
+    if (!rule.active) return res.status(400).json({ error: 'Cette règle est désactivée' });
+    if (!(await isFamilyChild(childId, req.user.familyId))) return res.status(404).json({ error: 'Enfant introuvable' });
 
     const result = await prisma.$transaction(async (tx: any) => {
       const { actual, capped, updatedUser } = await clampedDeduct(tx, childId, rule.amount);
@@ -1016,7 +1053,7 @@ app.post('/api/rules/:id/apply', authenticateToken, async (req: any, res) => {
 
 app.get('/api/expenses', authenticateToken, async (req: any, res) => {
   try {
-    let where: any = {};
+    const where: any = {};
     if (req.user.role === 'CHILD') {
       where.childId = req.user.id;
     } else {
@@ -1046,22 +1083,31 @@ app.post('/api/expenses/request', authenticateToken, async (req: any, res) => {
     if (settings?.maxExpensePerRequest != null && val > settings.maxExpensePerRequest) {
       return res.status(400).json({ error: `Le montant dépasse le maximum autorisé par demande (${settings.maxExpensePerRequest}€)` });
     }
-    if (settings?.maxExpensePerWeek != null) {
-      const startOfWeek = new Date();
-      startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-      startOfWeek.setHours(0, 0, 0, 0);
-      const weeklySpend = await prisma.transaction.aggregate({
-        where: { childId: req.user.id, type: { in: ['EXPENSE_APPROVED', 'EXPENSE_DEDUCTION'] }, date: { gte: startOfWeek } },
-        _sum: { amount: true }
-      });
-      const spent = Math.abs(weeklySpend._sum.amount ?? 0);
-      if (spent + val > settings.maxExpensePerWeek) {
-        return res.status(400).json({ error: `Cette demande dépasserait ta limite hebdomadaire (${settings.maxExpensePerWeek}€)` });
-      }
-    }
 
-    const expense = await prisma.expenseRequest.create({
-      data: { childId: req.user.id, title, description, amount: val, expenseType, reference }
+    const expense = await prisma.$transaction(async (tx: any) => {
+      if (settings?.maxExpensePerWeek != null) {
+        // Sans verrou, des demandes simultanées passeraient toutes le contrôle.
+        await lockUser(tx, req.user.id);
+        const startOfWeek = new Date();
+        startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+        startOfWeek.setHours(0, 0, 0, 0);
+        const weeklySpend = await tx.transaction.aggregate({
+          where: { childId: req.user.id, type: { in: ['EXPENSE_APPROVED', 'EXPENSE_DEDUCTION'] }, date: { gte: startOfWeek } },
+          _sum: { amount: true }
+        });
+        // Les demandes en attente sont des dépenses à venir : elles consomment déjà la limite.
+        const pending = await tx.expenseRequest.aggregate({
+          where: { childId: req.user.id, status: 'PENDING' },
+          _sum: { amount: true }
+        });
+        const committed = Math.abs(weeklySpend._sum.amount ?? 0) + (pending._sum.amount ?? 0);
+        if (committed + val > settings.maxExpensePerWeek) {
+          throw new Error(`Cette demande dépasserait ta limite hebdomadaire (${settings.maxExpensePerWeek}€)`);
+        }
+      }
+      return tx.expenseRequest.create({
+        data: { childId: req.user.id, title, description, amount: val, expenseType, reference }
+      });
     });
     emitToFamily(req.user.familyId, SocketEvents.EXPENSE_REQUESTED, expense);
     res.status(201).json({ expense });
@@ -1168,28 +1214,42 @@ app.put('/api/children/:id/split-settings', authenticateToken, async (req: any, 
   } catch (error: any) { res.status(400).json({ error: error.message }); }
 });
 
+const EXPENSE_ALREADY_PROCESSED = 'Cette demande a déjà été traitée';
+
+// `null` couvre aussi la demande d'une autre famille, pour ne pas révéler son existence.
+const findFamilyExpense = (id: string, familyId: string) =>
+  prisma.expenseRequest.findFirst({ where: { id, child: { familyId } } });
+
+// Comme transitionChore : de deux requêtes simultanées, une seule traite la demande.
+const transitionPendingExpense = async (db: any, id: string, data: object) => {
+  const { count } = await db.expenseRequest.updateMany({ where: { id, status: 'PENDING' }, data });
+  return count === 1 ? db.expenseRequest.findUniqueOrThrow({ where: { id } }) : null;
+};
+
 app.put('/api/expenses/:id/approve', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'PARENT') return res.status(403).json({ error: 'Interdit' });
   const body = parseBody(approveExpenseSchema, req, res);
   if (!body) return;
   const { approvedAmount, parentNote } = body;
   try {
-    const expense = await prisma.expenseRequest.findUnique({ where: { id: req.params.id } });
+    const expense = await findFamilyExpense(req.params.id, req.user.familyId);
     if (!expense) return res.status(404).json({ error: 'Demande non trouvée' });
     const requestedAmount = approvedAmount ?? expense.amount;
     if (!(requestedAmount > 0)) return res.status(400).json({ error: 'Montant invalide' });
 
     const result = await prisma.$transaction(async (tx: any) => {
+      if (!(await transitionPendingExpense(tx, expense.id, { status: 'APPROVED', parentNote }))) return null;
       const { actual, capped, updatedUser } = await clampedDeduct(tx, expense.childId, requestedAmount);
       const updatedExpense = await tx.expenseRequest.update({
-        where: { id: req.params.id },
-        data: { status: 'APPROVED', approvedAmount: actual, parentNote }
+        where: { id: expense.id },
+        data: { approvedAmount: actual }
       });
       const transaction = await tx.transaction.create({
         data: { childId: expense.childId, amount: -actual, type: 'EXPENSE_APPROVED', description: `Dépense approuvée : ${expense.title}`, expenseId: expense.id }
       });
       return { updatedExpense, updatedUser, capped, transaction };
     });
+    if (!result) return res.status(409).json({ error: EXPENSE_ALREADY_PROCESSED });
     emitToUser(expense.childId, SocketEvents.EXPENSE_APPROVED, result.updatedExpense);
     emitToUser(expense.childId, SocketEvents.BALANCE_UPDATED, { childId: expense.childId, balance: result.updatedUser.balance });
     res.json({ expense: result.updatedExpense, balance: result.updatedUser.balance, capped: result.capped });
@@ -1202,10 +1262,10 @@ app.put('/api/expenses/:id/reject', authenticateToken, async (req: any, res) => 
   if (!body) return;
   const { parentNote } = body;
   try {
-    const expense = await prisma.expenseRequest.update({
-      where: { id: req.params.id },
-      data: { status: 'REJECTED', parentNote }
-    });
+    const existing = await findFamilyExpense(req.params.id, req.user.familyId);
+    if (!existing) return res.status(404).json({ error: 'Demande non trouvée' });
+    const expense = await transitionPendingExpense(prisma, existing.id, { status: 'REJECTED', parentNote });
+    if (!expense) return res.status(409).json({ error: EXPENSE_ALREADY_PROCESSED });
     emitToUser(expense.childId, SocketEvents.EXPENSE_REJECTED, expense);
     res.json({ expense });
   } catch (error: any) { res.status(400).json({ error: error.message }); }
@@ -1217,6 +1277,7 @@ app.post('/api/expenses/deduct', authenticateToken, async (req: any, res) => {
   if (!body) return;
   const { childId, amount: val, description } = body;
   try {
+    if (!(await isFamilyChild(childId, req.user.familyId))) return res.status(404).json({ error: 'Enfant introuvable' });
     const result = await prisma.$transaction(async (tx: any) => {
       const { actual, capped, updatedUser } = await clampedDeduct(tx, childId, val);
       const transaction = await tx.transaction.create({

@@ -80,7 +80,7 @@ Détail complet dans `QA_BUG_REPORT.md`.
 Toutes les anomalies ont été corrigées (backend + frontend), une 18e
 anomalie découverte pendant la correction (modale trop haute sur mobile,
 `MODAL-1`) a été corrigée aussi. Un script Playwright de vérification dédié
-(`verify.js` + `verify2.js`, non versionnés) a rejoué chaque scénario de bug
+(perdu depuis, remplacé par la suite versionnée dans `e2e/`) a rejoué chaque scénario de bug
 — 19/19 vérifications passées, 0 erreur console restante. Voir le statut
 "Corrigé" et les preuves "avant/après" dans `QA_BUG_REPORT.md`.
 
