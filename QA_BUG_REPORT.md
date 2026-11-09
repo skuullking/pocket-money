@@ -297,6 +297,11 @@ l'API) est maintenant renvoyé par `/api/auth/me`, `/login` et les routes
 d'inscription, et le tableau de bord enfant affiche la vraie valeur (masquée
 si `monthDelta` vaut 0).
 
+**Complément (9 novembre 2026) :** ce correctif était incomplet. La colonne
+`monthDelta` n'était écrite que par le seed : le badge restait masqué sur un vrai
+compte et figé sur un compte de démo. `/api/auth/me` et `/login` la recalculent
+désormais depuis les transactions du mois (fuseau `APP_TIMEZONE`).
+
 ---
 
 ## ⚪ [COSMETIC-3] Avertissement React (DOM invalide) sur l'écran de soumission de corvée
@@ -310,7 +315,10 @@ testé (desktop + mobile).
 
 ## ⚪ [COSMETIC-4] Écran Statistiques 100 % statique
 
-**Statut : non corrigé — hors périmètre.** Le texte "Vos données arrivent !"
+**Statut : Corrigé depuis ce rapport.** L'écran affiche maintenant de vrais
+graphiques alimentés par `GET /api/analytics/overview`. Constat d'origine :
+
+Le texte "Vos données arrivent !"
 est un message "bientôt disponible" volontaire, pas un bug d'affichage ; y
 mettre de vrais graphiques est une fonctionnalité à part entière (choix des
 métriques, agrégations, période) plutôt qu'un correctif de bug. Laissé tel

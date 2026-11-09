@@ -126,6 +126,22 @@ test.describe('objectifs', () => {
     expect(await myBalance(page)).toBe(BOB_START);
   });
 
+  test('le tableau de bord affiche le nouveau solde sans recharger la page', async ({ page }) => {
+    await loginAsChild(page, 'Bob');
+    await page.goto('/child/goals');
+
+    answerNextPrompt(page, '5');
+    await fundingCard(page, 'Vacances à la mer').getByRole('button', { name: 'Ajouter des pièces' }).click();
+    await expect(toast(page, 'Argent ajouté')).toBeVisible();
+
+    // Navigation interne : un page.goto rechargerait l'application et masquerait le problème.
+    await page.evaluate(() => {
+      window.history.pushState({}, '', '/child');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    await expect(page.getByText(`€${(BOB_START - 5).toFixed(2)}`).first()).toBeVisible();
+  });
+
   for (const answer of ['-5', '0', 'abc']) {
     test(`la saisie « ${answer} » est refusée sans toucher au solde (MONEY-3)`, async ({ page }) => {
       await loginAsChild(page, 'Bob');

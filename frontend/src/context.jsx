@@ -79,7 +79,8 @@ export function AppProvider({ children }) {
 
   useEffect(() => {
     if (user) fetchAppData();
-  }, [user]);
+    // Sur l'id seulement : fetchAppData rafraîchit `user`, un objet neuf relancerait ce chargement sans fin.
+  }, [user?.id]);
 
   // Notifications temps réel : ne fonctionne que si le backend est déployé
   // en Docker/self-hosted (le serveur Socket.io est désactivé sur Vercel,
@@ -131,12 +132,16 @@ export function AppProvider({ children }) {
   const fetchAppData = async () => {
     if (!user) return;
     try {
-      const [familyData, choresData, goalsData, expensesData] = await Promise.all([
+      const [me, familyData, choresData, goalsData, expensesData] = await Promise.all([
+        authAPI.getMe().catch(() => null),
         familyAPI.getFamily().catch(() => null),
         choresAPI.getChores().catch(() => ({ chores: [] })),
         goalsAPI.getGoals().catch(() => ({ goals: [] })),
         expensesAPI.getExpenses().catch(() => ({ expenses: [] })),
       ]);
+
+      // Solde et variation du mois à jour ; une réponse arrivée après une déconnexion est ignorée.
+      if (me) setUser(current => (current?.id === me.user.id ? me.user : current));
 
       if (familyData) {
         setFamily(familyData.family);
