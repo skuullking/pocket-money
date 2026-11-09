@@ -261,7 +261,7 @@ export function ResetPassword() {
 // ── Sign Up Screen ─────────────────────────────────────────────────────────
 export function SignUp() {
   const navigate = useNavigate();
-  const { registerParentCreate, registerParentJoin, registerChild } = useApp();
+  const { registerParentCreate, registerParentJoin, registerChild, showToast } = useApp();
   const [step, setStep] = useState('choice'); // 'choice', 'form', 'rules'
   const [mode, setMode] = useState(''); // 'parent-create', 'parent-join', 'child'
   const [form, setForm] = useState({ name: '', email: '', password: '', familyName: '', inviteCode: '', age: '' });
@@ -412,7 +412,17 @@ export function SignUp() {
   return (
     <Layout title="Vos informations" showBack onBack={() => setStep('choice')}>
       <div className="max-w-md mx-auto py-8 px-4">
-        <form onSubmit={(e) => { e.preventDefault(); mode === 'parent-create' ? setStep('rules') : handleSubmit(); }} className="space-y-6">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (form.password.length < 6 || form.password.length > 72) {
+              showToast('Le mot de passe doit contenir entre 6 et 72 caractères.', 'error');
+              return;
+            }
+            mode === 'parent-create' ? setStep('rules') : handleSubmit();
+          }}
+          className="space-y-6"
+        >
           <Input
             label={mode === 'child' ? "Ton prénom" : "Ton nom complet"}
             placeholder={mode === 'child' ? "Alice" : "Sarah Dupont"}
