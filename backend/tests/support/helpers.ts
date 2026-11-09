@@ -80,6 +80,8 @@ export const createFamily = async (label = 'Dupont', childSpecs: ChildSpec[] = [
       password: passwordHash,
       role: 'PARENT',
       familyId: family.id,
+      termsAcceptedAt: new Date(),
+      parentalConsentAt: new Date(),
     },
   });
   const children = await Promise.all(

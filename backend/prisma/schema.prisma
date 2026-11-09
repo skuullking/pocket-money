@@ -40,6 +40,10 @@ model User {
   spendBalance Float @default(0)
   giveBalance  Float @default(0)
 
+  // RGPD : preuves horodatées, renseignées pour les parents uniquement.
+  termsAcceptedAt   DateTime?
+  parentalConsentAt DateTime?
+
   // Relations
   chores                 Chore[]            @relation("AssignedChores")
   choreTemplateAssignments ChoreTemplate[]  @relation("ChoreTemplateAssignments")

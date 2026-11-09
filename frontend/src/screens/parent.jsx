@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   Users, ListChecks, BarChart2, Settings, Plus,
   ChevronRight, Calendar, Wallet, CheckCircle, XCircle,
@@ -959,11 +959,33 @@ export function AnalyticsScreen() {
 
 // ── Settings Screen ──────────────────────────────────────────────────────
 export function SettingsScreen() {
-  const { family, logout, loading, deleteFamily } = useApp();
+  const { user, family, logout, loading, deleteFamily, deleteAccount, giveConsent, exportData } = useApp();
   const navigate = useNavigate();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [password, setPassword] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    setExporting(true);
+    await exportData();
+    setExporting(false);
+  };
+
+  const closeAccount = () => { setAccountOpen(false); setPassword(''); };
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      await deleteAccount(password);
+      navigate('/welcome', { replace: true });
+    } catch (e) {
+      // Le toast affiche déjà l'erreur ; la fenêtre reste ouverte pour réessayer.
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const handleLogout = () => { logout(); navigate('/welcome'); };
 
@@ -1003,6 +1025,24 @@ export function SettingsScreen() {
         </div>
       </Modal>
 
+      <Modal
+        open={accountOpen}
+        onClose={closeAccount}
+        title="Supprimer mon compte"
+        footer={
+          <Btn full variant="danger" icon={Trash2} disabled={!password} loading={deleting} onClick={handleDeleteAccount}>
+            Supprimer mon compte
+          </Btn>
+        }
+      >
+        <div className="space-y-5">
+          <p className="text-sm text-on-surface-variant font-body">
+            Ton compte parent sera supprimé. La famille et les comptes des enfants restent gérés par l'autre parent. Si tu es le seul parent, supprime plutôt la famille.
+          </p>
+          <Input label="Confirme avec ton mot de passe" type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} />
+        </div>
+      </Modal>
+
       <div className="max-w-2xl mx-auto space-y-8">
 
         {/* Family info */}
@@ -1028,10 +1068,29 @@ export function SettingsScreen() {
           </div>
         </Card>
 
+        {/* RGPD */}
+        <Card className="p-8 space-y-4">
+          <h3 className="font-headline font-black text-2xl tracking-tighter">Mes données</h3>
+          {!user?.parentalConsentAt && (
+            <div className="space-y-3">
+              <p className="text-sm text-on-surface-variant">Tes enfants ne pourront créer leur compte qu'après ton accord sur le traitement de leurs données et sur les <Link to="/terms" className="text-primary underline">conditions</Link>.</p>
+              <Btn full icon={Check} onClick={giveConsent}>Donner mon consentement parental</Btn>
+            </div>
+          )}
+          <Btn full variant="outline" loading={exporting} onClick={handleExport}>Exporter les données de la famille</Btn>
+          <p className="text-xs text-on-surface-variant text-center space-x-4">
+            <Link to="/privacy" className="underline">Confidentialité</Link>
+            <Link to="/terms" className="underline">Conditions d'utilisation</Link>
+          </p>
+        </Card>
+
         {/* Danger zone */}
         <Card className="p-8 space-y-4">
           <Btn variant="danger" full icon={LogOut} onClick={handleLogout} className="h-16 text-lg">
             Se déconnecter
+          </Btn>
+          <Btn variant="ghost" full icon={Trash2} onClick={() => setAccountOpen(true)} className="h-16 text-lg text-error hover:bg-error-container/20">
+            Supprimer mon compte
           </Btn>
           <Btn variant="ghost" full icon={Trash2} onClick={() => setDeleteOpen(true)} className="h-16 text-lg text-error hover:bg-error-container/20">
             Supprimer la famille

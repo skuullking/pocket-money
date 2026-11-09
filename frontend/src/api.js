@@ -66,6 +66,18 @@ export const familyAPI = {
   }),
 };
 
+export const accountAPI = {
+  giveConsent: () => fetchAPI('/account/consent', {
+    method: 'POST',
+    body: JSON.stringify({ acceptTerms: true, parentalConsent: true }),
+  }),
+  exportData: () => fetchAPI('/account/export'),
+  deleteAccount: (password) => fetchAPI('/account', {
+    method: 'DELETE',
+    body: JSON.stringify({ password }),
+  }),
+};
+
 export const choresAPI = {
   getChores: () => fetchAPI('/chores'),
   createChore: (data) => fetchAPI('/chores', {

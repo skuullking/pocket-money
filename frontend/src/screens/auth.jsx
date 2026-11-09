@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context';
 import { authAPI } from '../api';
-import { Btn, Input, Card, Avatar } from '../components/ui';
+import { Btn, Input, Card, Avatar, Checkbox } from '../components/ui';
 import { Layout } from '../components/layout';
 
 // ── Splash Screen ─────────────────────────────────────────────────────────
@@ -269,6 +269,8 @@ export function SignUp() {
   const [step, setStep] = useState('choice'); // 'choice', 'form', 'rules'
   const [mode, setMode] = useState(''); // 'parent-create', 'parent-join', 'child'
   const [form, setForm] = useState({ name: '', email: '', password: '', familyName: '', inviteCode: '', age: '' });
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [parentalConsent, setParentalConsent] = useState(false);
   const [rules, setRules] = useState([
     { title: 'Chambre non rangée', amount: '2' },
     { title: 'Gros mot', amount: '1' }
@@ -295,10 +297,12 @@ export function SignUp() {
           email: form.email, 
           password: form.password, 
           familyName: form.familyName,
+          acceptTerms,
+          parentalConsent,
           rules: rules.filter(r => r.title && r.amount)
         });
       } else if (mode === 'parent-join') {
-        res = await registerParentJoin({ name: form.name, email: form.email, password: form.password, inviteCode: form.inviteCode });
+        res = await registerParentJoin({ name: form.name, email: form.email, password: form.password, inviteCode: form.inviteCode, acceptTerms, parentalConsent });
       } else if (mode === 'child') {
         res = await registerChild({ name: form.name, password: form.password, inviteCode: form.inviteCode, age: parseInt(form.age) });
       }
@@ -427,6 +431,10 @@ export function SignUp() {
               showToast('Le mot de passe doit contenir entre 6 et 72 caractères.', 'error');
               return;
             }
+            if (mode !== 'child' && (!acceptTerms || !parentalConsent)) {
+              showToast('Coche les deux cases pour continuer.', 'error');
+              return;
+            }
             mode === 'parent-create' ? setStep('rules') : handleSubmit();
           }}
           className="space-y-6"
@@ -488,6 +496,27 @@ export function SignUp() {
               onChange={e => setForm(p => ({ ...p, inviteCode: e.target.value.toUpperCase() }))}
               required
             />
+          )}
+
+          {mode !== 'child' && (
+            <div className="space-y-4">
+              <Checkbox
+                checked={acceptTerms}
+                onChange={setAcceptTerms}
+                label={<>J'accepte les <Link to="/terms" className="text-primary underline">conditions d'utilisation</Link> et la <Link to="/privacy" className="text-primary underline">politique de confidentialité</Link>.</>}
+              />
+              <Checkbox
+                checked={parentalConsent}
+                onChange={setParentalConsent}
+                label="Je suis titulaire de l'autorité parentale et j'autorise le traitement des données des enfants à qui je donne le code famille."
+              />
+            </div>
+          )}
+
+          {mode === 'child' && (
+            <p className="text-xs text-on-surface-variant">
+              En créant ton compte avec le code donné par ton parent, tu rejoins sa famille. <Link to="/privacy" className="text-primary underline">Comment tes données sont protégées</Link>.
+            </p>
           )}
 
           <Btn type="submit" full loading={loading} size="lg" className="h-16 shadow-clay-primary text-lg mt-6">

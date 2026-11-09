@@ -11,7 +11,7 @@ import { AUTH_COOKIE, readAuthCookie } from './authCookie';
 import { assertEmailConfig, assertStrongSecret } from './config';
 import { initSocket, emitToFamily, emitToUser, disconnectFamily, disconnectUser, SocketEvents } from './socket';
 import {
-  allowanceSchema, applyRuleSchema, approveExpenseSchema, childSettingsSchema, createChoreSchema,
+  allowanceSchema, applyRuleSchema, approveExpenseSchema, childSettingsSchema, consentSchema, createChoreSchema,
   createChoreTemplateSchema, createGoalSchema, createRuleSchema, deductExpenseSchema, deleteFamilySchema, forgotPasswordSchema,
   goalAmountSchema, loginSchema, parseBody, registerChildSchema, registerParentCreateSchema,
   registerParentJoinSchema, rejectChoreSchema, rejectExpenseSchema, requestExpenseSchema, resetChildPasswordSchema, resetPasswordSchema,
@@ -308,6 +308,7 @@ const loginLimiter = authLimiter(10, 15, 'Trop de tentatives de connexion. Rées
 const registerLimiter = authLimiter(10, 60, "Trop d'inscriptions depuis cette connexion. Réessaie plus tard.");
 const forgotPasswordLimiter = authLimiter(5, 60, 'Trop de demandes de réinitialisation. Réessaie plus tard.');
 const deleteFamilyLimiter = authLimiter(5, 15, 'Trop de tentatives. Réessaie dans 15 minutes.', true);
+const exportLimiter = authLimiter(10, 60, "Trop d'exports. Réessaie plus tard.");
 
 // Les conflits d'unicité remontent dans un toast : pas d'erreur Prisma brute.
 const sendRegisterError = (error: any, res: any) => {
@@ -342,6 +343,8 @@ app.post('/api/auth/register/parent/create', registerLimiter, async (req, res) =
         password: hashedPassword,
         role: 'PARENT',
         familyId: family.id,
+        termsAcceptedAt: new Date(),
+        parentalConsentAt: new Date(),
       }
     });
 
@@ -361,7 +364,7 @@ app.post('/api/auth/register/parent/join', registerLimiter, async (req, res) => 
     if (!family) return res.status(404).json({ error: 'Code invalide' });
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
-      data: { name, email, password: hashedPassword, role: 'PARENT', familyId: family.id }
+      data: { name, email, password: hashedPassword, role: 'PARENT', familyId: family.id, termsAcceptedAt: new Date(), parentalConsentAt: new Date() }
     });
     setAuthCookie(res, user.id);
     res.status(201).json({ user: { id: user.id, name: user.name, role: user.role, familyId: user.familyId, balance: user.balance, monthDelta: user.monthDelta, avatar: user.avatar, color: user.color } });
@@ -375,6 +378,9 @@ app.post('/api/auth/register/child', registerLimiter, async (req, res) => {
   try {
     const family = await prisma.family.findUnique({ where: { inviteCode } });
     if (!family) return res.status(404).json({ error: 'Code invalide' });
+    // RGPD art. 8 : les données d'un mineur exigent l'accord d'un titulaire de l'autorité parentale.
+    const consenting = await prisma.user.count({ where: { familyId: family.id, role: 'PARENT', parentalConsentAt: { not: null } } });
+    if (consenting === 0) return res.status(403).json({ error: 'Un parent doit d\'abord donner son consentement dans ses paramètres.' });
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
       data: {
@@ -411,7 +417,7 @@ app.post('/api/auth/logout', (req, res) => {
 app.get('/api/auth/me', authenticateToken, async (req: any, res) => {
   const u = req.user;
   try {
-    res.json({ user: { id: u.id, name: u.name, role: u.role, familyId: u.familyId, balance: u.balance, monthDelta: await monthDeltaOf(u.id), saveBalance: u.saveBalance, spendBalance: u.spendBalance, giveBalance: u.giveBalance, avatar: u.avatar, color: u.color, age: u.age, settings: u.settings } });
+    res.json({ user: { id: u.id, name: u.name, role: u.role, familyId: u.familyId, balance: u.balance, monthDelta: await monthDeltaOf(u.id), saveBalance: u.saveBalance, spendBalance: u.spendBalance, giveBalance: u.giveBalance, avatar: u.avatar, color: u.color, age: u.age, settings: u.settings, parentalConsentAt: u.parentalConsentAt } });
   } catch (error: any) { res.status(400).json({ error: error.message }); }
 });
 
@@ -489,6 +495,68 @@ app.delete('/api/family', authenticateToken, deleteFamilyLimiter, async (req: an
     await prisma.family.delete({ where: { id: req.user.familyId } });
     emitToFamily(req.user.familyId, SocketEvents.ACCOUNT_DELETED, {});
     disconnectFamily(req.user.familyId);
+    res.clearCookie(AUTH_COOKIE, AUTH_COOKIE_OPTIONS);
+    res.json({ success: true });
+  } catch (error: any) { res.status(400).json({ error: error.message }); }
+});
+
+// ── RGPD ─────────────────────────────────────────────────────────────────
+
+// Pour les parents inscrits avant le recueil du consentement.
+app.post('/api/account/consent', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'PARENT') return res.status(403).json({ error: 'Interdit' });
+  if (!parseBody(consentSchema, req, res)) return;
+  try {
+    const now = new Date();
+    await prisma.user.update({ where: { id: req.user.id }, data: { termsAcceptedAt: now, parentalConsentAt: now } });
+    res.json({ parentalConsentAt: now });
+  } catch (error: any) { res.status(400).json({ error: error.message }); }
+});
+
+// Droits d'accès et de portabilité : tout ce que la famille a stocké, sauf les
+// mots de passe et les jetons de réinitialisation.
+app.get('/api/account/export', authenticateToken, exportLimiter, async (req: any, res) => {
+  if (req.user.role !== 'PARENT') return res.status(403).json({ error: 'Interdit' });
+  try {
+    const family = await prisma.family.findUniqueOrThrow({
+      where: { id: req.user.familyId },
+      include: {
+        rules: true,
+        choreTemplates: true,
+        goals: { include: { participants: true } },
+        users: { include: { chores: true, expenses: true, transactions: true, settings: true, allowanceSchedule: true } },
+      },
+    });
+    const users = family.users.map(({ password: _password, ...user }) => user);
+    res.setHeader('Content-Disposition', 'attachment; filename="pocketmoney-export.json"');
+    res.json({ exportedAt: new Date().toISOString(), family: { ...family, users } });
+  } catch (error: any) { res.status(400).json({ error: error.message }); }
+});
+
+// Le dernier parent ne peut pas partir seul : ses enfants resteraient sans
+// responsable. Il supprime alors la famille entière.
+app.delete('/api/account', authenticateToken, deleteFamilyLimiter, async (req: any, res) => {
+  if (req.user.role !== 'PARENT') return res.status(403).json({ error: 'Interdit' });
+  const body = parseBody(deleteFamilySchema, req, res);
+  if (!body) return;
+  try {
+    if (!(await bcrypt.compare(body.password, req.user.password))) {
+      return res.status(403).json({ error: 'Mot de passe incorrect' });
+    }
+    const deleted = await prisma.$transaction(async (tx: any) => {
+      // Deux parents qui partent en même temps ne doivent pas laisser la famille sans parent.
+      await tx.$queryRaw`SELECT id FROM "User" WHERE "familyId" = ${req.user.familyId} AND role = 'PARENT' ORDER BY id FOR UPDATE`;
+      const parents = await tx.user.count({ where: { familyId: req.user.familyId, role: 'PARENT' } });
+      if (parents < 2) return false;
+      await tx.user.delete({ where: { id: req.user.id } });
+      return true;
+    });
+    if (!deleted) {
+      return res.status(409).json({ error: 'Tu es le seul parent : supprime la famille pour effacer ton compte.' });
+    }
+    emitToUser(req.user.id, SocketEvents.ACCOUNT_DELETED, {});
+    disconnectUser(req.user.id);
+    emitToFamily(req.user.familyId, SocketEvents.MEMBER_REMOVED, { childId: req.user.id });
     res.clearCookie(AUTH_COOKIE, AUTH_COOKIE_OPTIONS);
     res.json({ success: true });
   } catch (error: any) { res.status(400).json({ error: error.message }); }
