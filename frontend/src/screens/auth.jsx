@@ -68,7 +68,7 @@ export function Welcome() {
                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant opacity-40">— Accès Rapide —</p>
                <div className="grid grid-cols-2 gap-3">
                   {quickAccessChildren.map(child => (
-                    <button key={child.id} onClick={() => navigate('/login', { state: { prefillName: child.name } })} className="group">
+                    <button key={child.id} onClick={() => navigate('/login', { state: { prefillName: child.name, prefillInviteCode: child.inviteCode || family?.inviteCode } })} className="group">
                       <Card hover className="p-4 flex flex-col items-center gap-2 border-2 border-transparent hover:border-primary/20">
                         <Avatar letter={child.avatar || child.name.charAt(0)} color={child.color} size="sm" />
                         <span className="font-bold text-xs text-on-surface truncate w-full">{child.name}</span>
@@ -93,16 +93,23 @@ export function SignIn() {
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useApp();
-  const [form, setForm] = useState({ email: location.state?.prefillName || '', password: '' });
+  const [form, setForm] = useState({
+    email: location.state?.prefillName || '',
+    inviteCode: location.state?.prefillInviteCode || '',
+    password: '',
+  });
   const [loading, setLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
+  // Les parents ont un email ; un prénom n'identifie un enfant qu'avec son code famille.
+  const isChildLogin = form.email.trim() !== '' && !form.email.includes('@');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (loading) return;
     setLoading(true);
     try {
-      const data = await login(form);
+      const { email, password, inviteCode } = form;
+      const data = await login(isChildLogin ? { email, password, inviteCode } : { email, password });
       if (data && data.user) {
         navigate(data.user.role === 'PARENT' ? '/parent' : '/child');
       }
@@ -132,6 +139,15 @@ export function SignIn() {
             required
             autoComplete="username"
           />
+          {isChildLogin && (
+            <Input
+              label="Code Famille"
+              placeholder="ABCD12"
+              value={form.inviteCode}
+              onChange={e => setForm(p => ({ ...p, inviteCode: e.target.value.toUpperCase() }))}
+              required
+            />
+          )}
           <Input
             label="Mot de passe"
             type={showPw ? 'text' : 'password'}

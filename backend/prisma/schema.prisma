@@ -49,6 +49,9 @@ model User {
   settings               ChildSettings?
   allowanceSchedule      AllowanceSchedule?
   passwordResetTokens    PasswordResetToken[]
+
+  // Les enfants se connectent avec code famille + prénom.
+  @@unique([familyId, name])
 }
 
 model Chore {

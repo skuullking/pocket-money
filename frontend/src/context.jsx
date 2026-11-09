@@ -149,7 +149,7 @@ export function AppProvider({ children }) {
       if (familyData) {
         setFamily(familyData.family);
         const children = (familyData.family?.users || []).filter(u => u.role === 'CHILD')
-          .map(c => ({ id: c.id, name: c.name, avatar: c.avatar, color: c.color }));
+          .map(c => ({ id: c.id, name: c.name, avatar: c.avatar, color: c.color, inviteCode: familyData.family.inviteCode }));
         setCachedFamilyMembers(children);
         try { localStorage.setItem(CACHED_FAMILY_KEY, JSON.stringify(children)); } catch (e) {}
       }

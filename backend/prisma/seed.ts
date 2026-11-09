@@ -431,6 +431,7 @@ async function main() {
   console.log('\nSeeding complete!');
   console.log('\nLogin credentials:');
   console.log('  Parent: sarah@dupont.fr / password123');
+  console.log('  Child: Alice, Bob or Claire / password123 / family code DUPONT2024');
   console.log('  Child Alice ID: user-alice');
   console.log('  Child Bob ID: user-bob');
   console.log('  Child Claire ID: user-claire');

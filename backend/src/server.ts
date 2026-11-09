@@ -219,6 +219,15 @@ const loginLimiter = authLimiter(10, 15, 'Trop de tentatives de connexion. Rées
 const registerLimiter = authLimiter(10, 60, "Trop d'inscriptions depuis cette connexion. Réessaie plus tard.");
 const forgotPasswordLimiter = authLimiter(5, 60, 'Trop de demandes de réinitialisation. Réessaie plus tard.');
 
+// Les conflits d'unicité remontent dans un toast : pas d'erreur Prisma brute.
+const sendRegisterError = (error: any, res: any) => {
+  if (error.code !== 'P2002') return res.status(400).json({ error: error.message });
+  const message = error.meta?.target?.includes('email')
+    ? 'Cet email est déjà utilisé'
+    : 'Ce prénom est déjà utilisé dans cette famille';
+  res.status(409).json({ error: message });
+};
+
 // ── Auth Endpoints ────────────────────────────────────────────────────────
 
 // 1. Parent: Create Family + Initial Rules
@@ -249,7 +258,7 @@ app.post('/api/auth/register/parent/create', registerLimiter, async (req, res) =
     const token = generateToken(user.id);
     res.status(201).json({ token, user: { id: user.id, name: user.name, role: user.role, familyId: user.familyId, balance: user.balance, monthDelta: user.monthDelta, avatar: user.avatar, color: user.color } });
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    sendRegisterError(error, res);
   }
 });
 
@@ -266,7 +275,7 @@ app.post('/api/auth/register/parent/join', registerLimiter, async (req, res) => 
     });
     const token = generateToken(user.id);
     res.status(201).json({ token, user: { id: user.id, name: user.name, role: user.role, familyId: user.familyId, balance: user.balance, monthDelta: user.monthDelta, avatar: user.avatar, color: user.color } });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendRegisterError(error, res); }
 });
 
 app.post('/api/auth/register/child', registerLimiter, async (req, res) => {
@@ -285,15 +294,18 @@ app.post('/api/auth/register/child', registerLimiter, async (req, res) => {
     });
     const token = generateToken(user.id);
     res.status(201).json({ token, user: { id: user.id, name: user.name, role: user.role, familyId: user.familyId, balance: user.balance, monthDelta: user.monthDelta, avatar: user.avatar, color: user.color, age: user.age } });
-  } catch (error: any) { res.status(400).json({ error: error.message }); }
+  } catch (error: any) { sendRegisterError(error, res); }
 });
 
 app.post('/api/auth/login', loginLimiter, async (req, res) => {
   const body = parseBody(loginSchema, req, res);
   if (!body) return;
-  const { email, password } = body;
+  const { email, inviteCode, password } = body;
   try {
-    const user = await prisma.user.findFirst({ where: { OR: [{ email: email }, { name: email }] } });
+    // Un prénom n'est unique que dans sa famille : sans code famille, seul l'email identifie un compte.
+    const user = inviteCode
+      ? await prisma.user.findFirst({ where: { name: email, role: 'CHILD', family: { inviteCode } } })
+      : await prisma.user.findUnique({ where: { email } });
     if (!user || !(await bcrypt.compare(password, user.password))) return res.status(401).json({ error: 'Identifiants invalides' });
     const token = generateToken(user.id);
     res.json({ token, user: { id: user.id, name: user.name, role: user.role, familyId: user.familyId, balance: user.balance, monthDelta: user.monthDelta, avatar: user.avatar, color: user.color, age: user.age } });
