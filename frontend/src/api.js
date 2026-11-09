@@ -55,6 +55,11 @@ export const authAPI = {
 export const familyAPI = {
   getFamily: () => fetchAPI('/family'),
   getChildren: () => fetchAPI('/family/children'),
+  removeChild: (childId) => fetchAPI(`/children/${childId}`, { method: 'DELETE' }),
+  deleteFamily: (password) => fetchAPI('/family', {
+    method: 'DELETE',
+    body: JSON.stringify({ password }),
+  }),
 };
 
 export const choresAPI = {

@@ -24,7 +24,7 @@ model User {
   email      String?  @unique
   password   String
   role       String   // PARENT, CHILD
-  family     Family   @relation(fields: [familyId], references: [id])
+  family     Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
   familyId   String
   
   // Specific for children
@@ -59,7 +59,7 @@ model Chore {
   title           String
   description     String?
   reward          Float
-  assignee        User        @relation("AssignedChores", fields: [assigneeId], references: [id])
+  assignee        User        @relation("AssignedChores", fields: [assigneeId], references: [id], onDelete: Cascade)
   assigneeId      String
   deadline        String
   status          String      @default("PENDING") // PENDING, SUBMITTED, COMPLETED, REJECTED
@@ -72,12 +72,12 @@ model Chore {
 
 model ChoreTemplate {
   id                String   @id @default(uuid())
-  family            Family   @relation(fields: [familyId], references: [id])
+  family            Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
   familyId          String
   title             String
   description       String?
   reward            Float
-  assignee          User     @relation("ChoreTemplateAssignments", fields: [assigneeId], references: [id])
+  assignee          User     @relation("ChoreTemplateAssignments", fields: [assigneeId], references: [id], onDelete: Cascade)
   assigneeId        String
   frequency         String   // DAILY, WEEKLY
   weekday           Int?     // 0-6, utilisé seulement si WEEKLY
@@ -88,7 +88,7 @@ model ChoreTemplate {
 
 model ExpenseRequest {
   id             String        @id @default(uuid())
-  child          User          @relation(fields: [childId], references: [id])
+  child          User          @relation(fields: [childId], references: [id], onDelete: Cascade)
   childId        String
   title          String
   description    String?
@@ -103,7 +103,7 @@ model ExpenseRequest {
 
 model Transaction {
   id          String          @id @default(uuid())
-  child       User            @relation(fields: [childId], references: [id])
+  child       User            @relation(fields: [childId], references: [id], onDelete: Cascade)
   childId     String
   amount      Float
   type        String          // CHORE, ALLOWANCE, PENALTY, GOAL_FUNDING, EXPENSE_APPROVED, EXPENSE_DEDUCTION, REFUND
@@ -115,7 +115,7 @@ model Transaction {
 
 model Goal {
   id           String            @id @default(uuid())
-  family       Family            @relation(fields: [familyId], references: [id])
+  family       Family            @relation(fields: [familyId], references: [id], onDelete: Cascade)
   familyId     String
   title        String
   target       Float
@@ -128,9 +128,9 @@ model Goal {
 
 model GoalParticipant {
   id                String @id @default(uuid())
-  goal              Goal   @relation(fields: [goalId], references: [id])
+  goal              Goal   @relation(fields: [goalId], references: [id], onDelete: Cascade)
   goalId            String
-  child             User   @relation(fields: [childId], references: [id])
+  child             User   @relation(fields: [childId], references: [id], onDelete: Cascade)
   childId           String
   contributedAmount Float  @default(0)
 
@@ -139,7 +139,7 @@ model GoalParticipant {
 
 model Rule {
   id          String  @id @default(uuid())
-  family      Family  @relation(fields: [familyId], references: [id])
+  family      Family  @relation(fields: [familyId], references: [id], onDelete: Cascade)
   familyId    String
   title       String
   description String?
@@ -149,7 +149,7 @@ model Rule {
 
 model ChildSettings {
   id                   String  @id @default(uuid())
-  child                User    @relation(fields: [childId], references: [id])
+  child                User    @relation(fields: [childId], references: [id], onDelete: Cascade)
   childId              String  @unique
   maxExpensePerRequest Float?
   maxExpensePerWeek    Float?
@@ -163,7 +163,7 @@ model ChildSettings {
 
 model PasswordResetToken {
   id        String   @id @default(uuid())
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
   tokenHash String
   expiresAt DateTime
@@ -173,7 +173,7 @@ model PasswordResetToken {
 
 model AllowanceSchedule {
   id         String    @id @default(uuid())
-  child      User      @relation(fields: [childId], references: [id])
+  child      User      @relation(fields: [childId], references: [id], onDelete: Cascade)
   childId    String    @unique
   amount     Float
   frequency  String    // WEEKLY, MONTHLY

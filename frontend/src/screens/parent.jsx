@@ -956,15 +956,50 @@ export function AnalyticsScreen() {
 
 // ── Settings Screen ──────────────────────────────────────────────────────
 export function SettingsScreen() {
-  const { family, logout, loading } = useApp();
+  const { family, logout, loading, deleteFamily } = useApp();
   const navigate = useNavigate();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [password, setPassword] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const handleLogout = () => { logout(); navigate('/welcome'); };
+
+  const closeDelete = () => { setDeleteOpen(false); setPassword(''); };
+
+  const handleDeleteFamily = async () => {
+    setDeleting(true);
+    try {
+      await deleteFamily(password);
+      navigate('/welcome', { replace: true });
+    } catch (e) {
+      // Le toast affiche déjà l'erreur ; la fenêtre reste ouverte pour réessayer.
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   if (loading || !family) return <Layout title="Paramètres"><div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div></div></Layout>;
 
   return (
     <Layout title="Paramètres">
+      <Modal
+        open={deleteOpen}
+        onClose={closeDelete}
+        title="Supprimer la famille"
+        footer={
+          <Btn full variant="danger" icon={Trash2} disabled={!password} loading={deleting} onClick={handleDeleteFamily}>
+            Supprimer définitivement
+          </Btn>
+        }
+      >
+        <div className="space-y-5">
+          <p className="text-sm text-on-surface-variant font-body">
+            Tous les comptes de <b>{family?.name}</b> seront supprimés, avec les soldes, corvées, objectifs et l'historique. Cette action est irréversible.
+          </p>
+          <Input label="Confirme avec ton mot de passe" type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} />
+        </div>
+      </Modal>
+
       <div className="max-w-2xl mx-auto space-y-8">
 
         {/* Family info */}
@@ -991,9 +1026,12 @@ export function SettingsScreen() {
         </Card>
 
         {/* Danger zone */}
-        <Card className="p-8">
+        <Card className="p-8 space-y-4">
           <Btn variant="danger" full icon={LogOut} onClick={handleLogout} className="h-16 text-lg">
             Se déconnecter
+          </Btn>
+          <Btn variant="ghost" full icon={Trash2} onClick={() => setDeleteOpen(true)} className="h-16 text-lg text-error hover:bg-error-container/20">
+            Supprimer la famille
           </Btn>
         </Card>
       </div>
@@ -1103,8 +1141,10 @@ export function ExpensesReview() {
 export function ChildSettingsScreen() {
   const navigate = useNavigate();
   const { childId } = useParams();
-  const { family, loading, updateChildSettings, updateAllowance, updateSplitSettings } = useApp();
+  const { family, loading, updateChildSettings, updateAllowance, updateSplitSettings, removeChild } = useApp();
   const child = (family?.users || []).find(u => u.id === childId);
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const [form, setForm] = useState({ maxExpensePerRequest: '', maxExpensePerWeek: '', frozen: false });
   const [initialized, setInitialized] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1150,6 +1190,18 @@ export function ChildSettingsScreen() {
   if (loading || !family) return <Layout title="Réglages"><div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div></div></Layout>;
   if (!child) return <Layout title="Erreur" showBack onBack={() => navigate('/parent/children')}><div className="text-center py-20"><p className="font-bold text-on-surface-variant">Enfant introuvable</p></div></Layout>;
 
+  const handleRemove = async () => {
+    setRemoving(true);
+    try {
+      await removeChild(child.id);
+      navigate('/parent/children', { replace: true });
+    } catch (e) {
+      // Le toast affiche déjà l'erreur.
+    } finally {
+      setRemoving(false);
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -1181,6 +1233,17 @@ export function ChildSettingsScreen() {
 
   return (
     <Layout title={`Réglages · ${child.name}`} showBack onBack={() => navigate('/parent/children')}>
+      <Modal
+        open={removeOpen}
+        onClose={() => setRemoveOpen(false)}
+        title={`Retirer ${child.name}`}
+        footer={<Btn full variant="danger" icon={Trash2} loading={removing} onClick={handleRemove}>Retirer définitivement</Btn>}
+      >
+        <p className="text-sm text-on-surface-variant font-body">
+          Le compte de <b>{child.name}</b> sera supprimé, avec son solde de <b className="font-mono-num">€{(child.balance || 0).toFixed(2)}</b>, ses corvées, ses dépenses et son historique. Ses objectifs personnels seront supprimés et sa part sera retirée des objectifs communs en cours. Cette action est irréversible.
+        </p>
+      </Modal>
+
       <div className="max-w-2xl mx-auto space-y-8">
         <Card className="p-8 flex items-center gap-5">
           <Avatar letter={child.avatar || child.name.charAt(0)} color={child.color} size="lg" />
@@ -1282,6 +1345,12 @@ export function ChildSettingsScreen() {
             </button>
           </div>
           <Btn full icon={Save} loading={saving} onClick={handleSave}>Enregistrer</Btn>
+        </Card>
+
+        <Card className="p-8">
+          <Btn full variant="ghost" icon={Trash2} onClick={() => setRemoveOpen(true)} className="h-16 text-lg text-error hover:bg-error-container/20">
+            Retirer de la famille
+          </Btn>
         </Card>
       </div>
     </Layout>
