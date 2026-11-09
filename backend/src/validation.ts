@@ -102,10 +102,12 @@ export const registerChildSchema = body({
   age: numeric(z.number(typeErrors('âge')).int(invalid('âge')).min(1, invalid('âge')).max(99, invalid('âge'))),
 });
 
-// `email` contient aussi le prénom des enfants : pas de contrôle de format. Pas
-// de minimum de mot de passe non plus, les comptes existants doivent rester accessibles.
+// `email` contient le prénom des enfants, qui fournissent alors `inviteCode` : pas
+// de contrôle de format. Pas de minimum de mot de passe non plus, les comptes
+// existants doivent rester accessibles.
 export const loginSchema = body({
-  email: z.string(typeErrors('identifiant')).min(1, missing('identifiant')).max(254, invalid('identifiant')),
+  email: z.string(typeErrors('identifiant')).trim().min(1, missing('identifiant')).max(254, invalid('identifiant')),
+  inviteCode: inviteCode.optional(),
   password: z.string(typeErrors('mot de passe')).min(1, missing('mot de passe')).max(1024, invalid('mot de passe')),
 });
 

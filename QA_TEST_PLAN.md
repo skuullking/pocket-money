@@ -53,7 +53,7 @@ iPhone 13 — viewport tactile 390×844, puis test en orientation paysage).
 - [ ] Sanction / dépense supérieure au solde disponible (passage en négatif ?)
 - [ ] Saisie d'un montant négatif dans le prompt "Ajouter des pièces"
 - [ ] Un enfant peut-il voir/financer l'objectif personnel d'un autre enfant ?
-- [ ] Connexion enfant via le champ "prénom" (pas d'email pour les enfants)
+- [ ] Connexion enfant via "prénom" + code famille (pas d'email pour les enfants)
 - [ ] Erreurs console navigateur (warnings React, erreurs réseau) sur chaque écran
 - [ ] Débordement horizontal / troncature sur petit viewport (390px), portrait et paysage
 

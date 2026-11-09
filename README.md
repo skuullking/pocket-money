@@ -9,7 +9,7 @@ A family allowance tracker where parents assign chores and children earn money t
 | Frontend | React 18, Vite, Tailwind CSS, React Router v7 |
 | Backend | Node.js, Express, TypeScript, Prisma ORM |
 | Database | SQLite (dev) |
-| Auth | JWT stored in localStorage |
+| Auth | JWT in an httpOnly cookie |
 | Realtime | Socket.IO |
 
 ## Project Structure
