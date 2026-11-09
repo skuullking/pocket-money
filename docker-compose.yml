@@ -36,6 +36,8 @@ services:
       DATABASE_URL: postgresql://pocketmoney:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant}@db:5432/pocketmoney
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET manquant, voir .env.production.example}
       JWT_EXPIRES_IN: 7d
+      RESEND_API_KEY: ${RESEND_API_KEY:?RESEND_API_KEY manquant, voir .env.production.example}
+      EMAIL_FROM: ${EMAIL_FROM:?EMAIL_FROM manquant, voir .env.production.example}
       PORT: 3001
       CLIENT_URL: https://${DOMAIN:?DOMAIN manquant, voir .env.production.example}
       # Caddy puis nginx : deux proxys devant l'API. Caddy ignore le X-Forwarded-For

@@ -8,7 +8,7 @@ import { createServer } from 'http';
 import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
 import { AUTH_COOKIE, readAuthCookie } from './authCookie';
-import { assertStrongSecret } from './config';
+import { assertEmailConfig, assertStrongSecret } from './config';
 import { initSocket, emitToFamily, emitToUser, disconnectFamily, disconnectUser, SocketEvents } from './socket';
 import {
   allowanceSchema, applyRuleSchema, approveExpenseSchema, childSettingsSchema, createChoreSchema,
@@ -59,6 +59,8 @@ const CLIENT_ORIGIN: string = (() => {
   }
   return 'http://localhost:5173';
 })();
+
+if (process.env.NODE_ENV === 'production') assertEmailConfig(process.env);
 
 // Nombre de proxys devant l'API. Sans cela, derrière nginx, tous les clients
 // partageraient l'IP du proxy et donc le même compteur de rate limiting. Une
@@ -128,11 +130,8 @@ const setAuthCookie = (res: any, userId: string) => {
   res.cookie(AUTH_COOKIE, generateToken(userId), { ...AUTH_COOKIE_OPTIONS, maxAge: SESSION_MAX_AGE_MS });
 };
 
-// Envoi d'email : bascule automatiquement sur un fournisseur réel dès que
-// RESEND_API_KEY est configurée. Sans clé (ex. en dev local), le lien de
-// réinitialisation est simplement affiché dans les logs serveur — le flux
-// (génération/validation/expiration du token) reste testable de bout en
-// bout sans dépendance externe, seul le transport email change.
+// Sans RESEND_API_KEY (dev local uniquement : la production refuse de démarrer
+// sans), le lien est affiché dans les logs pour tester le flux de bout en bout.
 const sendPasswordResetEmail = async (to: string, resetUrl: string) => {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -141,12 +140,14 @@ const sendPasswordResetEmail = async (to: string, resetUrl: string) => {
   }
   const { Resend } = await import('resend');
   const resend = new Resend(apiKey);
-  await resend.emails.send({
+  // Le SDK Resend renvoie ses erreurs au lieu de les lever.
+  const { error } = await resend.emails.send({
     from: process.env.EMAIL_FROM || 'PocketMoney <onboarding@resend.dev>',
     to,
     subject: 'Réinitialise ton mot de passe PocketMoney',
     html: `<p>Bonjour,</p><p>Clique sur ce lien pour choisir un nouveau mot de passe (valable 1 heure) :</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>Si tu n'es pas à l'origine de cette demande, ignore cet email.</p>`,
   });
+  if (error) throw new Error(`Resend: ${error.message}`);
 };
 
 // Sérialise les lecture-puis-écriture sur un compte jusqu'à la fin de la transaction.
@@ -430,7 +431,7 @@ app.post('/api/auth/forgot-password', forgotPasswordLimiter, async (req, res) =>
       const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
       const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1h
       await prisma.passwordResetToken.create({ data: { userId: user.id, tokenHash, expiresAt } });
-      const resetUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/reset-password?token=${rawToken}`;
+      const resetUrl = `${CLIENT_ORIGIN}/reset-password?token=${rawToken}`;
       await sendPasswordResetEmail(user.email!, resetUrl);
     }
     res.json(genericResponse);

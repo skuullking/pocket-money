@@ -8,7 +8,7 @@ import {
   submitChoreSchema,
 } from '../src/validation';
 import { assertTestDatabase } from './support/testDatabase';
-import { assertStrongSecret } from '../src/config';
+import { assertEmailConfig, assertStrongSecret } from '../src/config';
 
 describe('readAuthCookie', () => {
   it.each([
@@ -174,5 +174,20 @@ describe('assertStrongSecret', () => {
 
   it('accepte un secret généré', () => {
     expect(() => assertStrongSecret('JWT_SECRET', 'a1'.repeat(32))).not.toThrow();
+  });
+});
+
+describe('assertEmailConfig', () => {
+  it.each([
+    ['clé absente', { EMAIL_FROM: 'PocketMoney <a@pocketmoney.fr>' }],
+    ['expéditeur absent', { RESEND_API_KEY: 're_x' }],
+    ['expéditeur de test Resend', { RESEND_API_KEY: 're_x', EMAIL_FROM: 'PocketMoney <onboarding@resend.dev>' }],
+  ])('refuse : %s', (_label, env) => {
+    expect(() => assertEmailConfig(env as NodeJS.ProcessEnv)).toThrow();
+  });
+
+  it('accepte une clé et un domaine vérifié', () => {
+    const env = { RESEND_API_KEY: 're_x', EMAIL_FROM: 'PocketMoney <a@pocketmoney.fr>' };
+    expect(() => assertEmailConfig(env as unknown as NodeJS.ProcessEnv)).not.toThrow();
   });
 });
