@@ -135,7 +135,8 @@ test.describe('plancher du solde (MONEY-1)', () => {
     await page.goto('/parent/children');
     await page.reload();
 
-    await page.getByRole('button', { name: 'Sanction' }).locator('visible=true').first().click();
+    // Cible Alice par son nom : l'API ne garantit pas l'ordre des enfants.
+    await page.locator('article', { hasText: 'Alice' }).getByRole('button', { name: 'Sanction' }).click();
     await page.getByRole('button', { name: /QA Big Fine/ }).click();
     await page.getByRole('button', { name: /Appliquer/ }).click();
 
