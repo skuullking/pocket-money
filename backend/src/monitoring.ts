@@ -45,6 +45,39 @@ export const isIncident = (error: any) =>
   /^PrismaClient(Initialization|RustPanic|UnknownRequest)/.test(error?.name ?? '') ||
   (error?.name === 'PrismaClientKnownRequestError' && /^(P1|P2024)/.test(error.code ?? ''));
 
+// Compatible Slack (text) et Discord (content). Une alerte perdue ne doit rien casser.
+export const sendAlert = async (message: string) => {
+  const url = process.env.ALERT_WEBHOOK_URL;
+  if (!url) return;
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: message, content: message }),
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch (error) {
+    logger.warn('alert not delivered', { error: (error as Error).message });
+  }
+};
+
+const ERROR_WINDOW_MS = 5 * 60 * 1000;
+const ALERT_COOLDOWN_MS = 30 * 60 * 1000;
+
+export const createErrorRateAlarm = (threshold: number, alert: (message: string) => unknown) => {
+  let recent: number[] = [];
+  let lastAlertAt = -Infinity;
+  return (now = Date.now()) => {
+    recent = recent.filter(at => now - at < ERROR_WINDOW_MS);
+    recent.push(now);
+    if (recent.length < threshold || now - lastAlertAt < ALERT_COOLDOWN_MS) return;
+    lastAlertAt = now;
+    alert(`PocketMoney : ${recent.length} erreurs 5xx en 5 minutes.`);
+  };
+};
+
+export const recordServerError = createErrorRateAlarm(Number(process.env.ALERT_5XX_THRESHOLD) || 10, sendAlert);
+
 export const installProcessHandlers = () => {
   process.on('unhandledRejection', reason => reportError(reason, 'unhandledRejection'));
   process.on('uncaughtException', error => {

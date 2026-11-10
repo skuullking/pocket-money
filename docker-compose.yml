@@ -43,6 +43,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET manquant, voir .env.production.example}
       JWT_EXPIRES_IN: 7d
       SENTRY_DSN: ${SENTRY_DSN:-}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      ALERT_5XX_THRESHOLD: ${ALERT_5XX_THRESHOLD:-10}
       RESEND_API_KEY: ${RESEND_API_KEY:?RESEND_API_KEY manquant, voir .env.production.example}
       EMAIL_FROM: ${EMAIL_FROM:?EMAIL_FROM manquant, voir .env.production.example}
       PORT: 3001
@@ -50,6 +52,36 @@ services:
       # Caddy puis nginx : deux proxys devant l'API. Caddy ignore le X-Forwarded-For
       # reçu d'Internet, un client ne peut donc pas usurper son IP.
       TRUST_PROXY_HOPS: 2
+
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: pocketmoney
+      PGDATABASE: pocketmoney
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+    volumes:
+      - ./deploy:/deploy:ro
+      - db-backups:/backups
+    command: ["sh", "/deploy/backup.sh"]
+
+  monitor:
+    image: alpine:3.20
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      MONITOR_URL: http://app/api/health
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+    volumes:
+      - ./deploy:/deploy:ro
+    command: ["sh", "/deploy/monitor.sh"]
 
   caddy:
     image: caddy:2-alpine
@@ -70,5 +102,6 @@ services:
 
 volumes:
   db-data:
+  db-backups:
   caddy-data:
   caddy-config:

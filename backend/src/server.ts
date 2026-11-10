@@ -9,7 +9,7 @@ import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
 import { AUTH_COOKIE, readAuthCookie } from './authCookie';
 import { assertEmailConfig, assertStrongSecret } from './config';
-import { installProcessHandlers, isIncident, logger, reportError } from './monitoring';
+import { installProcessHandlers, isIncident, logger, recordServerError, reportError } from './monitoring';
 import { initSocket, emitToFamily, emitToUser, disconnectFamily, disconnectUser, SocketEvents } from './socket';
 import {
   allowanceSchema, applyRuleSchema, approveExpenseSchema, childSettingsSchema, consentSchema, createChoreSchema,
@@ -95,8 +95,12 @@ app.use((req, res, next) => {
   res.on('finish', () => {
     if (req.path === '/api/health' && res.statusCode < 500) return;
     const fields = { method: req.method, path: req.path, status: res.statusCode, durationMs: Date.now() - startedAt };
-    if (res.statusCode >= 500) logger.error('request', fields);
-    else logger.info('request', fields);
+    if (res.statusCode >= 500) {
+      logger.error('request', fields);
+      recordServerError();
+    } else {
+      logger.info('request', fields);
+    }
   });
   next();
 });

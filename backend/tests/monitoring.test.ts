@@ -9,7 +9,7 @@ vi.mock('@prisma/client', () => ({
   },
 }));
 
-import { isIncident, logger, scrubEvent } from '../src/monitoring';
+import { createErrorRateAlarm, isIncident, logger, scrubEvent, sendAlert } from '../src/monitoring';
 import app from '../src/server';
 
 const named = (name: string, code?: string) => Object.assign(new Error('secret interne'), { name, code });
@@ -63,5 +63,52 @@ describe('panne de base de données', () => {
       .send({ email: 'a@example.test', password: 'x' })
       .expect(500);
     expect(JSON.stringify(res.body)).not.toContain('secret interne');
+  });
+});
+
+describe('alerte sur les erreurs 5xx', () => {
+  const MINUTE = 60_000;
+
+  it('prévient une fois le seuil atteint, puis respecte le délai', () => {
+    const alert = vi.fn();
+    const record = createErrorRateAlarm(3, alert);
+    record(0);
+    record(MINUTE);
+    expect(alert).not.toHaveBeenCalled();
+    record(2 * MINUTE);
+    expect(alert).toHaveBeenCalledTimes(1);
+    record(3 * MINUTE);
+    expect(alert).toHaveBeenCalledTimes(1);
+  });
+
+  it('oublie les erreurs sorties de la fenêtre', () => {
+    const alert = vi.fn();
+    const record = createErrorRateAlarm(3, alert);
+    record(0);
+    record(MINUTE);
+    record(10 * MINUTE);
+    expect(alert).not.toHaveBeenCalled();
+  });
+});
+
+describe('sendAlert', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it('ne fait rien sans webhook', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubEnv('ALERT_WEBHOOK_URL', '');
+    await sendAlert('panne');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('survit à un webhook injoignable', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('réseau')));
+    vi.stubEnv('ALERT_WEBHOOK_URL', 'https://hooks.example.test/x');
+    await expect(sendAlert('panne')).resolves.toBeUndefined();
   });
 });
