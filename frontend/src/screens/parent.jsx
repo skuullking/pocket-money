@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   Users, ListChecks, BarChart2, Settings, Plus,
   ChevronRight, Calendar, Wallet, CheckCircle, XCircle,
@@ -103,7 +103,7 @@ export function ParentDashboard() {
             
             <div className="space-y-4">
               {(chores || []).filter(c => c.status === 'SUBMITTED' || c.status === 'submitted').length === 0 ? (
-                <div className="py-10 text-center space-y-3 opacity-50">
+                <div className="py-10 text-center space-y-3">
                    <div className="w-16 h-16 rounded-full bg-surface-container mx-auto flex items-center justify-center text-secondary">
                       <CheckCircle size={32} />
                    </div>
@@ -209,12 +209,12 @@ export function ChoresList() {
                   </Card>
                 );
               })}
-              {submitted.length === 0 && <div className="col-span-full py-10 text-center opacity-40 italic">Rien à valider.</div>}
+              {submitted.length === 0 && <div className="col-span-full py-10 text-center italic">Rien à valider.</div>}
             </div>
           </section>
 
           <section>
-            <div className="flex items-center gap-4 mb-6 px-2 opacity-60">
+            <div className="flex items-center gap-4 mb-6 px-2">
               <h3 className="font-headline font-black text-2xl text-on-surface tracking-tighter">En cours</h3>
               <div className="bg-surface-container-highest px-3 py-1 rounded-full text-on-surface-variant text-xs font-black">{pending.length}</div>
             </div>
@@ -223,7 +223,7 @@ export function ChoresList() {
               {pending.map((chore) => {
                 const child = children.find(u => u.id === chore.assigneeId);
                 return (
-                  <Card key={chore.id} hover className="p-5 opacity-80 hover:opacity-100" onClick={() => navigate(`/parent/chores/${chore.id}`)}>
+                  <Card key={chore.id} hover className="p-5" onClick={() => navigate(`/parent/chores/${chore.id}`)}>
                     <div className="flex flex-col gap-4">
                       <div className="flex items-center justify-between">
                          <Avatar letter={child?.avatar || child?.name?.charAt(0)} color={child?.color} size="xs" />
@@ -239,7 +239,7 @@ export function ChoresList() {
 
           {choreTemplates.length > 0 && (
             <section>
-              <div className="flex items-center gap-4 mb-6 px-2 opacity-60">
+              <div className="flex items-center gap-4 mb-6 px-2">
                 <h3 className="font-headline font-black text-2xl text-on-surface tracking-tighter">Modèles récurrents</h3>
                 <div className="bg-surface-container-highest px-3 py-1 rounded-full text-on-surface-variant text-xs font-black">{choreTemplates.length}</div>
               </div>
@@ -260,7 +260,7 @@ export function ChoresList() {
                         <button onClick={() => updateChoreTemplate(t.id, { active: !t.active })} className="p-2 text-on-surface-variant hover:text-primary" title={t.active ? 'Mettre en pause' : 'Réactiver'}>
                           {t.active ? <Clock size={16} /> : <CheckCircle size={16} />}
                         </button>
-                        <button onClick={() => window.confirm(`Supprimer le modèle "${t.title}" ?`) && deleteChoreTemplate(t.id)} className="p-2 text-on-surface-variant hover:text-error">
+                        <button onClick={() => window.confirm(`Supprimer le modèle "${t.title}" ?`) && deleteChoreTemplate(t.id)} aria-label={`Supprimer le modèle ${t.title}`} className="p-2 text-on-surface-variant hover:text-error">
                           <Trash2 size={16} />
                         </button>
                       </div>
@@ -320,7 +320,7 @@ export function ChoreDetail() {
                 
                 <div className="space-y-4">
                   <h2 className="text-4xl font-headline font-black text-on-surface tracking-tighter leading-tight">{chore.title}</h2>
-                  <p className="text-lg text-on-surface-variant font-medium leading-relaxed opacity-80">{chore.description || "Aucune description fournie."}</p>
+                  <p className="text-lg text-on-surface-variant font-medium leading-relaxed">{chore.description || "Aucune description fournie."}</p>
                 </div>
 
                 <div className="pt-8 border-t border-on-surface/5 flex items-center gap-4">
@@ -347,7 +347,7 @@ export function ChoreDetail() {
                       <img src={chore.proofImageUrl} alt="Preuve" className="w-full h-auto max-h-[500px] object-cover" />
                     </div>
                   ) : (
-                    <div className="p-8 bg-surface-container rounded-3xl text-center text-on-surface-variant opacity-60">
+                    <div className="p-8 bg-surface-container rounded-3xl text-center text-on-surface-variant">
                       <p className="font-medium">Aucune photo fournie.</p>
                     </div>
                   )}
@@ -377,7 +377,7 @@ export function ChoreDetail() {
               </Card>
             )}
 
-            <Card className="p-8 space-y-6 opacity-80">
+            <Card className="p-8 space-y-6">
                <div className="space-y-1">
                  <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Échéance</p>
                  <div className="flex items-center gap-2 font-headline font-extrabold text-on-surface">
@@ -387,7 +387,7 @@ export function ChoreDetail() {
                {!isSubmitted && (
                  <div className="pt-6 border-t border-on-surface/5 space-y-3">
                    <Btn full variant="outline" onClick={() => navigate(`/parent/chores/${chore.id}/edit`)}>Modifier la tâche</Btn>
-                   <button onClick={handleDelete} className="w-full py-3 text-xs font-bold text-error/60 hover:text-error transition-colors uppercase tracking-widest">Supprimer la corvée</button>
+                   <button onClick={handleDelete} className="w-full py-3 text-xs font-bold text-error hover:text-error transition-colors uppercase tracking-widest">Supprimer la corvée</button>
                  </div>
                )}
             </Card>
@@ -503,6 +503,9 @@ export function CreateChore() {
                   </div>
                   <button
                     type="button"
+                    role="switch"
+                    aria-checked={repeat}
+                    aria-label="Répéter cette corvée"
                     onClick={() => setRepeat(r => !r)}
                     className={`w-16 h-9 rounded-full flex-shrink-0 transition-colors relative ${repeat ? 'bg-primary' : 'bg-surface-container-highest'}`}
                   >
@@ -674,7 +677,7 @@ export function ChildrenView() {
               <Avatar letter={child.avatar || child.name.charAt(0)} color={child.color} size="lg" />
               <div className="space-y-1">
                 <h4 className="text-3xl font-headline font-black text-on-surface tracking-tighter leading-none">{child.name}</h4>
-                <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest opacity-60">Explorateur · {child.age} ans</p>
+                <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Explorateur · {child.age} ans</p>
                 {child.settings?.frozen && (
                   <Badge variant="danger" size="sm"><Lock size={10} className="inline -mt-0.5 mr-1" />Compte gelé</Badge>
                 )}
@@ -771,8 +774,8 @@ export function RulesScreen() {
 
           <div className="space-y-3">
             {rules.length === 0 && editingId === null && (
-              <div className="text-center py-8 text-on-surface-variant/50">
-                <Shield size={36} className="mx-auto mb-3 opacity-40" />
+              <div className="text-center py-8 text-on-surface-variant">
+                <Shield size={36} className="mx-auto mb-3" />
                 <p className="text-sm font-body">Aucune sanction définie. Ajoutez-en une !</p>
               </div>
             )}
@@ -784,8 +787,8 @@ export function RulesScreen() {
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <span className="font-mono-num font-black text-error">-€{rule.amount}</span>
-                  <button onClick={() => startEdit(rule)} className="p-2 text-on-surface-variant hover:text-primary"><Edit3 size={16} /></button>
-                  <button onClick={() => handleDelete(rule)} className="p-2 text-on-surface-variant hover:text-error"><Trash2 size={16} /></button>
+                  <button onClick={() => startEdit(rule)} aria-label={`Modifier ${rule.title}`} className="p-2 text-on-surface-variant hover:text-primary"><Edit3 size={16} /></button>
+                  <button onClick={() => handleDelete(rule)} aria-label={`Supprimer ${rule.title}`} className="p-2 text-on-surface-variant hover:text-error"><Trash2 size={16} /></button>
                 </div>
               </div>
             ))}
@@ -882,7 +885,7 @@ export function AnalyticsScreen() {
         <Card className="p-8">
           <h3 className="font-headline font-black text-2xl tracking-tighter mb-6">Corvées par semaine</h3>
           {weeklyData.length === 0 ? (
-            <p className="text-center py-16 text-on-surface-variant opacity-60">Pas encore assez de données.</p>
+            <p className="text-center py-16 text-on-surface-variant">Pas encore assez de données.</p>
           ) : (
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={weeklyData}>
@@ -901,7 +904,7 @@ export function AnalyticsScreen() {
           <Card className="p-8">
             <h3 className="font-headline font-black text-2xl tracking-tighter mb-6">Dépenses par catégorie</h3>
             {categoryData.length === 0 ? (
-              <p className="text-center py-16 text-on-surface-variant opacity-60">Aucune dépense approuvée.</p>
+              <p className="text-center py-16 text-on-surface-variant">Aucune dépense approuvée.</p>
             ) : (
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
@@ -917,7 +920,7 @@ export function AnalyticsScreen() {
           <Card className="p-8">
             <h3 className="font-headline font-black text-2xl tracking-tighter mb-6">Tendance d'épargne</h3>
             {savingsData.length === 0 ? (
-              <p className="text-center py-16 text-on-surface-variant opacity-60">Pas encore d'épargne.</p>
+              <p className="text-center py-16 text-on-surface-variant">Pas encore d'épargne.</p>
             ) : (
               <ResponsiveContainer width="100%" height={240}>
                 <LineChart data={savingsData}>
@@ -935,7 +938,7 @@ export function AnalyticsScreen() {
         <Card className="p-8">
           <h3 className="font-headline font-black text-2xl tracking-tighter mb-6">Comparaison entre enfants</h3>
           {childData.length === 0 ? (
-            <p className="text-center py-16 text-on-surface-variant opacity-60">Aucun enfant dans la famille.</p>
+            <p className="text-center py-16 text-on-surface-variant">Aucun enfant dans la famille.</p>
           ) : (
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={childData}>
@@ -956,11 +959,33 @@ export function AnalyticsScreen() {
 
 // ── Settings Screen ──────────────────────────────────────────────────────
 export function SettingsScreen() {
-  const { family, logout, loading, deleteFamily } = useApp();
+  const { user, family, logout, loading, deleteFamily, deleteAccount, giveConsent, exportData } = useApp();
   const navigate = useNavigate();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [password, setPassword] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    setExporting(true);
+    await exportData();
+    setExporting(false);
+  };
+
+  const closeAccount = () => { setAccountOpen(false); setPassword(''); };
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      await deleteAccount(password);
+      navigate('/welcome', { replace: true });
+    } catch (e) {
+      // Le toast affiche déjà l'erreur ; la fenêtre reste ouverte pour réessayer.
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const handleLogout = () => { logout(); navigate('/welcome'); };
 
@@ -1000,6 +1025,24 @@ export function SettingsScreen() {
         </div>
       </Modal>
 
+      <Modal
+        open={accountOpen}
+        onClose={closeAccount}
+        title="Supprimer mon compte"
+        footer={
+          <Btn full variant="danger" icon={Trash2} disabled={!password} loading={deleting} onClick={handleDeleteAccount}>
+            Supprimer mon compte
+          </Btn>
+        }
+      >
+        <div className="space-y-5">
+          <p className="text-sm text-on-surface-variant font-body">
+            Ton compte parent sera supprimé. La famille et les comptes des enfants restent gérés par l'autre parent. Si tu es le seul parent, supprime plutôt la famille.
+          </p>
+          <Input label="Confirme avec ton mot de passe" type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} />
+        </div>
+      </Modal>
+
       <div className="max-w-2xl mx-auto space-y-8">
 
         {/* Family info */}
@@ -1025,10 +1068,29 @@ export function SettingsScreen() {
           </div>
         </Card>
 
+        {/* RGPD */}
+        <Card className="p-8 space-y-4">
+          <h3 className="font-headline font-black text-2xl tracking-tighter">Mes données</h3>
+          {!user?.parentalConsentAt && (
+            <div className="space-y-3">
+              <p className="text-sm text-on-surface-variant">Tes enfants ne pourront créer leur compte qu'après ton accord sur le traitement de leurs données et sur les <Link to="/terms" className="text-primary underline">conditions</Link>.</p>
+              <Btn full icon={Check} onClick={giveConsent}>Donner mon consentement parental</Btn>
+            </div>
+          )}
+          <Btn full variant="outline" loading={exporting} onClick={handleExport}>Exporter les données de la famille</Btn>
+          <p className="text-xs text-on-surface-variant text-center space-x-4">
+            <Link to="/privacy" className="underline">Confidentialité</Link>
+            <Link to="/terms" className="underline">Conditions d'utilisation</Link>
+          </p>
+        </Card>
+
         {/* Danger zone */}
         <Card className="p-8 space-y-4">
           <Btn variant="danger" full icon={LogOut} onClick={handleLogout} className="h-16 text-lg">
             Se déconnecter
+          </Btn>
+          <Btn variant="ghost" full icon={Trash2} onClick={() => setAccountOpen(true)} className="h-16 text-lg text-error hover:bg-error-container/20">
+            Supprimer mon compte
           </Btn>
           <Btn variant="ghost" full icon={Trash2} onClick={() => setDeleteOpen(true)} className="h-16 text-lg text-error hover:bg-error-container/20">
             Supprimer la famille
@@ -1116,10 +1178,10 @@ export function ExpensesReview() {
 
         {resolved.length > 0 && (
           <section>
-            <h3 className="font-headline font-black text-2xl text-on-surface tracking-tighter mb-6 opacity-60">Historique</h3>
+            <h3 className="font-headline font-black text-2xl text-on-surface tracking-tighter mb-6">Historique</h3>
             <div className="space-y-3">
               {resolved.map(expense => (
-                <Card key={expense.id} className="p-5 opacity-80">
+                <Card key={expense.id} className="p-5">
                   <div className="flex items-center justify-between gap-4">
                     <div className="min-w-0">
                       <p className="font-bold text-on-surface truncate">{expense.title}</p>
@@ -1141,7 +1203,7 @@ export function ExpensesReview() {
 export function ChildSettingsScreen() {
   const navigate = useNavigate();
   const { childId } = useParams();
-  const { family, loading, updateChildSettings, updateAllowance, updateSplitSettings, removeChild } = useApp();
+  const { family, loading, updateChildSettings, updateAllowance, updateSplitSettings, removeChild, resetChildPassword, showToast } = useApp();
   const child = (family?.users || []).find(u => u.id === childId);
   const [removeOpen, setRemoveOpen] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -1155,6 +1217,9 @@ export function ChildSettingsScreen() {
   const [allowanceForm, setAllowanceForm] = useState({ amount: '', frequency: 'WEEKLY', active: true });
   const [allowanceInitialized, setAllowanceInitialized] = useState(false);
   const [savingAllowance, setSavingAllowance] = useState(false);
+
+  const [passwordForm, setPasswordForm] = useState({ password: '', confirm: '' });
+  const [savingPassword, setSavingPassword] = useState(false);
 
   useEffect(() => {
     if (child?.settings && !initialized) {
@@ -1208,6 +1273,22 @@ export function ChildSettingsScreen() {
       await updateChildSettings(child.id, form);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    const { password, confirm } = passwordForm;
+    if (password.length < 6 || password.length > 72) return showToast('Le mot de passe doit contenir entre 6 et 72 caractères.', 'error');
+    if (password !== confirm) return showToast('Les mots de passe ne correspondent pas.', 'error');
+    setSavingPassword(true);
+    try {
+      await resetChildPassword(child.id, password);
+      setPasswordForm({ password: '', confirm: '' });
+    } catch (e) {
+      // Le toast affiche déjà l'erreur.
+    } finally {
+      setSavingPassword(false);
     }
   };
 
@@ -1278,6 +1359,10 @@ export function ChildSettingsScreen() {
               <p className="text-xs text-on-surface-variant mt-1">Crédité automatiquement à la bonne fréquence.</p>
             </div>
             <button
+              type="button"
+              role="switch"
+              aria-checked={allowanceForm.active}
+              aria-label="Activer le versement automatique"
               onClick={() => setAllowanceForm(f => ({ ...f, active: !f.active }))}
               className={`w-16 h-9 rounded-full flex-shrink-0 transition-colors relative ${allowanceForm.active ? 'bg-primary' : 'bg-surface-container-highest'}`}
             >
@@ -1295,6 +1380,10 @@ export function ChildSettingsScreen() {
           <div className="flex items-center justify-between bg-surface-container-low/50 rounded-2xl p-5">
             <p className="font-bold text-on-surface">Activer la répartition</p>
             <button
+              type="button"
+              role="switch"
+              aria-checked={splitForm.splitEnabled}
+              aria-label="Activer la répartition"
               onClick={() => setSplitForm(f => ({ ...f, splitEnabled: !f.splitEnabled }))}
               className={`w-16 h-9 rounded-full flex-shrink-0 transition-colors relative ${splitForm.splitEnabled ? 'bg-primary' : 'bg-surface-container-highest'}`}
             >
@@ -1338,6 +1427,10 @@ export function ChildSettingsScreen() {
               <p className="text-xs text-on-surface-variant mt-1">Bloque toute nouvelle demande de dépense.</p>
             </div>
             <button
+              type="button"
+              role="switch"
+              aria-checked={form.frozen}
+              aria-label="Geler le compte"
               onClick={() => setForm(f => ({ ...f, frozen: !f.frozen }))}
               className={`w-16 h-9 rounded-full flex-shrink-0 transition-colors relative ${form.frozen ? 'bg-error' : 'bg-surface-container-highest'}`}
             >
@@ -1345,6 +1438,18 @@ export function ChildSettingsScreen() {
             </button>
           </div>
           <Btn full icon={Save} loading={saving} onClick={handleSave}>Enregistrer</Btn>
+        </Card>
+
+        <Card className="p-8">
+          <form onSubmit={handleResetPassword} className="space-y-6">
+            <div>
+              <h3 className="font-headline font-black text-2xl tracking-tighter">Mot de passe</h3>
+              <p className="text-xs text-on-surface-variant font-body mt-1">{child.name} a oublié son mot de passe ? Choisis-en un nouveau et communique-le à ton enfant.</p>
+            </div>
+            <Input label="Nouveau mot de passe" type="password" autoComplete="new-password" value={passwordForm.password} onChange={e => setPasswordForm(f => ({ ...f, password: e.target.value }))} required />
+            <Input label="Confirmer le mot de passe" type="password" autoComplete="new-password" value={passwordForm.confirm} onChange={e => setPasswordForm(f => ({ ...f, confirm: e.target.value }))} required />
+            <Btn type="submit" full icon={Save} loading={savingPassword}>Changer le mot de passe</Btn>
+          </form>
         </Card>
 
         <Card className="p-8">

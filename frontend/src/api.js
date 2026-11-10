@@ -56,7 +56,23 @@ export const familyAPI = {
   getFamily: () => fetchAPI('/family'),
   getChildren: () => fetchAPI('/family/children'),
   removeChild: (childId) => fetchAPI(`/children/${childId}`, { method: 'DELETE' }),
+  resetChildPassword: (childId, newPassword) => fetchAPI(`/children/${childId}/password`, {
+    method: 'PUT',
+    body: JSON.stringify({ newPassword }),
+  }),
   deleteFamily: (password) => fetchAPI('/family', {
+    method: 'DELETE',
+    body: JSON.stringify({ password }),
+  }),
+};
+
+export const accountAPI = {
+  giveConsent: () => fetchAPI('/account/consent', {
+    method: 'POST',
+    body: JSON.stringify({ acceptTerms: true, parentalConsent: true }),
+  }),
+  exportData: () => fetchAPI('/account/export'),
+  deleteAccount: (password) => fetchAPI('/account', {
     method: 'DELETE',
     body: JSON.stringify({ password }),
   }),

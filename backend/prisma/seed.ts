@@ -40,6 +40,8 @@ async function main() {
       id: 'user-sarah',
       familyId: family.id,
       role: 'PARENT',
+      termsAcceptedAt: new Date(),
+      parentalConsentAt: new Date(),
       name: 'Sarah Dupont',
       email: 'sarah@dupont.fr',
       password: hashedPassword,

@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context';
 import { authAPI } from '../api';
-import { Btn, Input, Card, Avatar } from '../components/ui';
+import { Btn, Input, Card, Avatar, Checkbox } from '../components/ui';
 import { Layout } from '../components/layout';
 
 // ── Splash Screen ─────────────────────────────────────────────────────────
@@ -31,7 +31,7 @@ export function Splash({ onFinish }) {
       </div>
       <div className="mt-10 text-center animate-fade-in z-10">
         <h1 className="font-headline font-extrabold text-4xl tracking-tighter mb-2">PocketMoney</h1>
-        <p className="text-white/70 font-body text-base font-medium">L'argent de poche simplifié</p>
+        <p className="text-on-primary font-body text-base font-medium">L'argent de poche simplifié</p>
       </div>
     </div>
   );
@@ -54,7 +54,7 @@ export function Welcome() {
         <h1 className="text-5xl font-headline font-black text-on-surface mb-4 tracking-tighter">
           Pocket<span className="text-primary">Money</span>
         </h1>
-        <p className="text-on-surface-variant text-lg font-medium mb-12 max-w-sm leading-relaxed opacity-80">
+        <p className="text-on-surface-variant text-lg font-medium mb-12 max-w-sm leading-relaxed">
           Gérez l'argent de poche en famille simplement.
         </p>
 
@@ -65,7 +65,7 @@ export function Welcome() {
           
           {quickAccessChildren.length > 0 && (
             <div className="pt-8 space-y-3">
-               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant opacity-40">— Accès Rapide —</p>
+               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant">— Accès Rapide —</p>
                <div className="grid grid-cols-2 gap-3">
                   {quickAccessChildren.map(child => (
                     <button key={child.id} onClick={() => navigate('/login', { state: { prefillName: child.name, prefillInviteCode: child.inviteCode || family?.inviteCode } })} className="group">
@@ -81,6 +81,10 @@ export function Welcome() {
 
           <div className="pt-8 border-t border-on-surface/5 w-full text-center">
             <Link to="/signup" className="text-sm font-bold text-primary hover:underline">Créer une nouvelle famille</Link>
+            <p className="mt-6 text-xs text-on-surface-variant space-x-4">
+              <Link to="/privacy" className="underline">Confidentialité</Link>
+              <Link to="/terms" className="underline">Conditions d'utilisation</Link>
+            </p>
           </div>
         </div>
       </div>
@@ -157,7 +161,7 @@ export function SignIn() {
             required
             autoComplete="current-password"
             suffix={
-              <button type="button" onClick={() => setShowPw(!showPw)} className="text-on-surface-variant p-2">
+              <button type="button" onClick={() => setShowPw(!showPw)} aria-label={showPw ? 'Masquer le mot de passe' : 'Afficher le mot de passe'} aria-pressed={showPw} className="text-on-surface-variant p-2">
                 {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             }
@@ -205,7 +209,7 @@ export function ForgotPassword() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
-            <p className="text-sm text-on-surface-variant text-center">Entre ton email de parent, on t'enverra un lien pour choisir un nouveau mot de passe.</p>
+            <p className="text-sm text-on-surface-variant text-center">Entre ton email de parent, on t'enverra un lien pour choisir un nouveau mot de passe. Enfant ? Demande à ton parent de le changer dans tes réglages.</p>
             <Input label="Email" type="email" placeholder="votre@email.com" value={email} onChange={e => setEmail(e.target.value)} required />
             <Btn type="submit" full loading={loading} size="lg" className="h-16 shadow-clay-primary text-lg">Envoyer le lien</Btn>
           </form>
@@ -265,6 +269,8 @@ export function SignUp() {
   const [step, setStep] = useState('choice'); // 'choice', 'form', 'rules'
   const [mode, setMode] = useState(''); // 'parent-create', 'parent-join', 'child'
   const [form, setForm] = useState({ name: '', email: '', password: '', familyName: '', inviteCode: '', age: '' });
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [parentalConsent, setParentalConsent] = useState(false);
   const [rules, setRules] = useState([
     { title: 'Chambre non rangée', amount: '2' },
     { title: 'Gros mot', amount: '1' }
@@ -291,10 +297,12 @@ export function SignUp() {
           email: form.email, 
           password: form.password, 
           familyName: form.familyName,
+          acceptTerms,
+          parentalConsent,
           rules: rules.filter(r => r.title && r.amount)
         });
       } else if (mode === 'parent-join') {
-        res = await registerParentJoin({ name: form.name, email: form.email, password: form.password, inviteCode: form.inviteCode });
+        res = await registerParentJoin({ name: form.name, email: form.email, password: form.password, inviteCode: form.inviteCode, acceptTerms, parentalConsent });
       } else if (mode === 'child') {
         res = await registerChild({ name: form.name, password: form.password, inviteCode: form.inviteCode, age: parseInt(form.age) });
       }
@@ -320,7 +328,7 @@ export function SignUp() {
               </div>
               <div className="flex-1">
                 <p className="font-extrabold text-on-surface text-lg tracking-tight">Parent : Créer une famille</p>
-                <p className="text-xs text-on-surface-variant opacity-70">Démarrez votre gestion.</p>
+                <p className="text-xs text-on-surface-variant">Démarrez votre gestion.</p>
               </div>
               <ChevronRight size={24} className="text-outline-variant" />
             </Card>
@@ -371,7 +379,8 @@ export function SignUp() {
               <div key={index} className="flex gap-3 items-end animate-fade-in">
                 <div className="flex-1">
                   <Input 
-                    label={index === 0 ? "Motif de l'amende" : ""} 
+                    label={index === 0 ? "Motif de l'amende" : ""}
+                    aria-label={index === 0 ? undefined : "Motif de l'amende"} 
                     placeholder="ex: Chambre en désordre" 
                     value={rule.title} 
                     onChange={(e) => handleRuleChange(index, 'title', e.target.value)}
@@ -379,7 +388,8 @@ export function SignUp() {
                 </div>
                 <div className="w-24">
                   <Input 
-                    label={index === 0 ? "Prix (€)" : ""} 
+                    label={index === 0 ? "Prix (€)" : ""}
+                    aria-label={index === 0 ? undefined : "Prix (€)"} 
                     type="number" 
                     placeholder="2" 
                     value={rule.amount} 
@@ -387,6 +397,8 @@ export function SignUp() {
                   />
                 </div>
                 <button 
+                  type="button"
+                  aria-label={`Retirer la règle ${index + 1}`}
                   onClick={() => handleRemoveRule(index)}
                   className="p-4 text-error hover:bg-error/10 rounded-xl transition-colors mb-1"
                 >
@@ -417,6 +429,10 @@ export function SignUp() {
             e.preventDefault();
             if (form.password.length < 6 || form.password.length > 72) {
               showToast('Le mot de passe doit contenir entre 6 et 72 caractères.', 'error');
+              return;
+            }
+            if (mode !== 'child' && (!acceptTerms || !parentalConsent)) {
+              showToast('Coche les deux cases pour continuer.', 'error');
               return;
             }
             mode === 'parent-create' ? setStep('rules') : handleSubmit();
@@ -480,6 +496,27 @@ export function SignUp() {
               onChange={e => setForm(p => ({ ...p, inviteCode: e.target.value.toUpperCase() }))}
               required
             />
+          )}
+
+          {mode !== 'child' && (
+            <div className="space-y-4">
+              <Checkbox
+                checked={acceptTerms}
+                onChange={setAcceptTerms}
+                label={<>J'accepte les <Link to="/terms" className="text-primary underline">conditions d'utilisation</Link> et la <Link to="/privacy" className="text-primary underline">politique de confidentialité</Link>.</>}
+              />
+              <Checkbox
+                checked={parentalConsent}
+                onChange={setParentalConsent}
+                label="Je suis titulaire de l'autorité parentale et j'autorise le traitement des données des enfants à qui je donne le code famille."
+              />
+            </div>
+          )}
+
+          {mode === 'child' && (
+            <p className="text-xs text-on-surface-variant">
+              En créant ton compte avec le code donné par ton parent, tu rejoins sa famille. <Link to="/privacy" className="text-primary underline">Comment tes données sont protégées</Link>.
+            </p>
           )}
 
           <Btn type="submit" full loading={loading} size="lg" className="h-16 shadow-clay-primary text-lg mt-6">

@@ -21,6 +21,8 @@ const newParent = (overrides = {}) => ({
   email: 'sarah@example.test',
   password: PASSWORD,
   familyName: 'Dupont',
+  acceptTerms: true,
+  parentalConsent: true,
   ...overrides,
 });
 
@@ -65,7 +67,14 @@ describe('inscription', () => {
     const { family } = await createFamily();
     const res = await anonymous()
       .post('/api/auth/register/parent/join')
-      .send({ name: 'Paul', email: 'paul@example.test', password: PASSWORD, inviteCode: family.inviteCode })
+      .send({
+        name: 'Paul',
+        email: 'paul@example.test',
+        password: PASSWORD,
+        inviteCode: family.inviteCode,
+        acceptTerms: true,
+        parentalConsent: true,
+      })
       .expect(201);
     expect(res.body.user).toMatchObject({ role: 'PARENT', familyId: family.id });
   });
@@ -86,7 +95,14 @@ describe('inscription', () => {
       .expect(404);
     await anonymous()
       .post('/api/auth/register/parent/join')
-      .send({ name: 'Paul', email: 'paul@example.test', password: PASSWORD, inviteCode: 'NOPE' })
+      .send({
+        name: 'Paul',
+        email: 'paul@example.test',
+        password: PASSWORD,
+        inviteCode: 'NOPE',
+        acceptTerms: true,
+        parentalConsent: true,
+      })
       .expect(404);
   });
 

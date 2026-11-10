@@ -4,6 +4,7 @@ import { AppProvider, useApp } from './context';
 
 // Import basic components
 import { Welcome, SignIn, SignUp, Splash, ForgotPassword, ResetPassword } from './screens/auth.jsx';
+import { PrivacyPolicy, TermsOfUse } from './screens/legal.jsx';
 import { ParentDashboard, ChoresList, ChoreDetail, CreateChore, ChildrenView, RulesScreen, PenaltyHistoryScreen, AnalyticsScreen, SettingsScreen, ExpensesReview, ChildSettingsScreen } from './screens/parent.jsx';
 import { ChildDashboard, AvailableChores, SubmitChore, MyChores, BalanceScreen, GoalsScreen, ProfileScreen, ExpensesScreen } from './screens/child.jsx';
 
@@ -42,6 +43,8 @@ function AppRoutes() {
       <Route path="/signup" element={<SignUp />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/privacy" element={<PrivacyPolicy />} />
+      <Route path="/terms" element={<TermsOfUse />} />
       
       {/* Parent */}
       <Route element={<ProtectedRoute role="PARENT" />}>

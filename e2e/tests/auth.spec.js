@@ -87,6 +87,8 @@ test.describe('inscription', () => {
     await page.getByPlaceholder('votre@email.com').fill(`marc-${Date.now()}@example.test`);
     await page.getByPlaceholder('••••••••').fill(PASSWORD);
     await page.getByPlaceholder('ex: Les Dupont').fill('Les Martin');
+    await page.getByText("J'accepte les").click();
+    await page.getByText("Je suis titulaire de l'autorité parentale").click();
     await page.getByRole('button', { name: 'Suivant : Configurer les règles' }).click();
     await page.getByRole('button', { name: 'Créer ma famille' }).click();
     await expect(page).toHaveURL(/\/parent$/);

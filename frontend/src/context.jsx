@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
-import { authAPI, familyAPI, choresAPI, goalsAPI, transactionsAPI, rulesAPI, expensesAPI, childSettingsAPI, allowanceAPI, choreTemplatesAPI, SOCKET_URL } from './api';
+import { accountAPI, authAPI, familyAPI, choresAPI, goalsAPI, transactionsAPI, rulesAPI, expensesAPI, childSettingsAPI, allowanceAPI, choreTemplatesAPI, SOCKET_URL } from './api';
 
 // Un même événement doit provoquer un message différent selon qui le reçoit
 // (le parent ou l'enfant concerné) — pas de doublon, pas de bruit inutile.
@@ -257,12 +257,58 @@ export function AppProvider({ children }) {
     }
   };
 
+  const resetChildPassword = async (childId, newPassword) => {
+    try {
+      await familyAPI.resetChildPassword(childId, newPassword);
+      showToast('Mot de passe modifié.');
+    } catch (error) {
+      showToast(error.message, 'error');
+      throw error;
+    }
+  };
+
   const deleteFamily = async (password) => {
     try {
       await familyAPI.deleteFamily(password);
       clearSession();
       forgetFamilyMembers();
       showToast('Famille supprimée.', 'info');
+    } catch (error) {
+      showToast(error.message, 'error');
+      throw error;
+    }
+  };
+
+  const giveConsent = async () => {
+    try {
+      await accountAPI.giveConsent();
+      showToast('Consentement enregistré.');
+      fetchAppData();
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  };
+
+  const exportData = async () => {
+    try {
+      const data = await accountAPI.exportData();
+      const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'pocketmoney-export.json';
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  };
+
+  const deleteAccount = async (password) => {
+    try {
+      await accountAPI.deleteAccount(password);
+      clearSession();
+      forgetFamilyMembers();
+      showToast('Compte supprimé.', 'info');
     } catch (error) {
       showToast(error.message, 'error');
       throw error;
@@ -511,7 +557,7 @@ export function AppProvider({ children }) {
       triggerConfetti, addChore, approveChore, rejectChore, submitChore, editChore, deleteChore,
       fundGoal, withdrawFromGoal, requestExpense, approveExpense, rejectExpense,
       createRule, editRule, deleteRule, applyPenalty, updateChildSettings, updateAllowance, updateSplitSettings,
-      createChoreTemplate, updateChoreTemplate, deleteChoreTemplate, removeChild, deleteFamily,
+      createChoreTemplate, updateChoreTemplate, deleteChoreTemplate, removeChild, resetChildPassword, deleteFamily, giveConsent, exportData, deleteAccount,
       toggleTheme: () => setTheme(t => t === 'dark' ? 'light' : 'dark')
     }}>
       {children}

@@ -75,6 +75,13 @@ const newPassword = z.string(typeErrors('mot de passe'))
 
 const inviteCode = text('code famille', 20);
 
+// Une case à cocher : seul un `true` explicite vaut acceptation.
+const accepted = (message: string) => z.literal(true, { errorMap: () => ({ message }) });
+const consentShape = {
+  acceptTerms: accepted("Accepte les conditions d'utilisation et la politique de confidentialité"),
+  parentalConsent: accepted('Le consentement parental est requis'),
+};
+
 const body = <T extends z.ZodRawShape>(shape: T) =>
   z.object(shape, { required_error: 'Corps de requête invalide', invalid_type_error: 'Corps de requête invalide' });
 
@@ -85,6 +92,7 @@ export const registerParentCreateSchema = body({
   email,
   password: newPassword,
   familyName: text('nom de la famille', 100),
+  ...consentShape,
   rules: z.array(
     body({ title: text('motif'), amount: nonNegativeAmount('montant') }),
     typeErrors('règles'),
@@ -96,6 +104,7 @@ export const registerParentJoinSchema = body({
   email,
   password: newPassword,
   inviteCode,
+  ...consentShape,
 });
 
 export const registerChildSchema = body({
@@ -120,6 +129,10 @@ export const resetPasswordSchema = body({
   token: z.string(typeErrors('lien')).min(1, missing('lien')).max(200, invalid('lien')),
   newPassword,
 });
+
+export const resetChildPasswordSchema = body({ newPassword });
+
+export const consentSchema = body(consentShape);
 
 export const deleteFamilySchema = body({
   password: z.string(typeErrors('mot de passe')).min(1, missing('mot de passe')).max(1024, invalid('mot de passe')),

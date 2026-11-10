@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckCircle, AlertCircle, Info, XCircle, X, Check, Sparkles, Sun, Moon, ChevronRight } from 'lucide-react';
 
@@ -39,6 +39,7 @@ export function Btn({
   onClick,
   type = 'button',
   className = '',
+  ...rest
 }) {
   const base =
     'inline-flex items-center justify-center gap-3 font-headline font-black rounded-full cursor-pointer ' +
@@ -65,6 +66,7 @@ export function Btn({
       type={type}
       disabled={disabled || loading}
       onClick={onClick}
+      {...rest}
       className={`${base} ${variants[variant] || variants.primary} ${sizes[size]} ${full ? 'w-full' : ''} ${className}`}
     >
       {loading ? (
@@ -111,9 +113,21 @@ export function StatusBadge({ status }) {
 
 // ── Card ─────────────────────────────────────────────────────────────────
 export function Card({ children, className = '', onClick, hover = false }) {
+  // Clavier : seule la carte ciblée réagit, pas un bouton placé à l'intérieur.
+  const keyboard = onClick && {
+    role: 'button',
+    tabIndex: 0,
+    onKeyDown: (e) => {
+      if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+        e.preventDefault();
+        onClick(e);
+      }
+    },
+  };
   return (
     <div
       onClick={onClick}
+      {...keyboard}
       className={`bg-white dark:bg-surface-container-highest rounded-[2.5rem] border-0 shadow-clay transition-all duration-500
         ${hover ? 'cursor-pointer hover:scale-[1.02] hover:-translate-y-1 active:scale-95 shadow-2xl' : ''}
         ${className}`}
@@ -125,52 +139,64 @@ export function Card({ children, className = '', onClick, hover = false }) {
 
 // ── Inputs ───────────────────────────────────────────────────────────────
 export function Input({ label, error, prefix, suffix, className = '', ...props }) {
+  const id = useId();
+  const errorId = `${id}-error`;
   return (
     <div className="flex flex-col gap-2.5 w-full">
-      {label && <label className="text-sm font-black text-on-surface tracking-tight ml-4">{label}</label>}
+      {label && <label htmlFor={id} className="text-sm font-black text-on-surface tracking-tight ml-4">{label}</label>}
       <div className="relative flex items-center group">
         {prefix && <span className="absolute left-6 text-on-surface-variant font-black">{prefix}</span>}
         <input
+          id={id}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
           className={`w-full bg-surface-container-lowest dark:bg-surface-container-highest rounded-[1.5rem] px-6 h-16 border-2 border-transparent
-            text-base font-bold text-on-surface shadow-clay-well focus:bg-white dark:focus:bg-surface-container-highest focus:border-primary/40 focus:outline-none transition-all
+            text-base font-bold text-on-surface shadow-clay-well focus:bg-white dark:focus:bg-surface-container-highest focus:border-primary/40 transition-all
             ${error ? 'border-error/50 bg-error-container/10' : ''} ${prefix ? 'pl-12' : ''} ${suffix ? 'pr-12' : ''} ${className}`}
           {...props}
         />
         {suffix && <div className="absolute right-4">{suffix}</div>}
       </div>
-      {error && <p className="text-xs text-error font-black ml-4 animate-fade-in">{error}</p>}
+      {error && <p id={errorId} className="text-xs text-error font-black ml-4 animate-fade-in">{error}</p>}
     </div>
   );
 }
 
 export function Textarea({ label, error, className = '', ...props }) {
+  const id = useId();
+  const errorId = `${id}-error`;
   return (
     <div className="flex flex-col gap-2.5 w-full">
-      {label && <label className="text-sm font-black text-on-surface tracking-tight ml-4">{label}</label>}
+      {label && <label htmlFor={id} className="text-sm font-black text-on-surface tracking-tight ml-4">{label}</label>}
       <textarea
+        id={id}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : undefined}
         className={`w-full bg-surface-container-lowest dark:bg-surface-container-highest rounded-[2rem] px-6 py-6 border-2 border-transparent
-          text-base font-bold text-on-surface shadow-clay-well focus:bg-white dark:focus:bg-surface-container-highest focus:border-primary/40 focus:outline-none transition-all resize-none min-h-[140px]
+          text-base font-bold text-on-surface shadow-clay-well focus:bg-white dark:focus:bg-surface-container-highest focus:border-primary/40 transition-all resize-none min-h-[140px]
           ${error ? 'border-error/50 bg-error-container/10' : ''} ${className}`}
         {...props}
       />
-      {error && <p className="text-xs text-error font-black ml-4 animate-fade-in">{error}</p>}
+      {error && <p id={errorId} className="text-xs text-error font-black ml-4 animate-fade-in">{error}</p>}
     </div>
   );
 }
 
 export function Select({ label, options = [], ...props }) {
+  const id = useId();
   return (
     <div className="flex flex-col gap-2.5 w-full">
-      {label && <label className="text-sm font-black text-on-surface tracking-tight ml-4">{label}</label>}
+      {label && <label htmlFor={id} className="text-sm font-black text-on-surface tracking-tight ml-4">{label}</label>}
       <div className="relative group">
         <select
+          id={id}
           className="w-full bg-surface-container-lowest dark:bg-surface-container-highest rounded-[1.5rem] px-6 h-16 border-2 border-transparent
-            text-base font-bold text-on-surface shadow-clay-well focus:bg-white dark:focus:bg-surface-container-highest focus:border-primary/40 focus:outline-none appearance-none transition-all cursor-pointer"
+            text-base font-bold text-on-surface shadow-clay-well focus:bg-white dark:focus:bg-surface-container-highest focus:border-primary/40 appearance-none transition-all cursor-pointer"
           {...props}
         >
           {options.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
         </select>
-        <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none opacity-50 group-focus-within:text-primary transition-colors">
+        <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none group-focus-within:text-primary transition-colors">
            <ChevronRight size={20} className="rotate-90" />
         </div>
       </div>
@@ -195,11 +221,11 @@ export function Avatar({ letter, color = '#835500', size = 'md' }) {
 }
 
 // ── ProgressBar ──────────────────────────────────────────────────────────
-export function ProgressBar({ value, max = 100, height = 'md', color = 'primary' }) {
+export function ProgressBar({ value, max = 100, height = 'md', color = 'primary', label = 'Progression' }) {
   const pct = Math.min(100, Math.round((value / max) * 100));
   const heights = { sm: 'h-3', md: 'h-5', lg: 'h-8' };
   return (
-    <div className={`w-full bg-surface-container-highest rounded-full shadow-clay-well border-2 border-on-surface/5 ${heights[height]} overflow-hidden p-1`}>
+    <div role="progressbar" aria-label={label} aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} className={`w-full bg-surface-container-highest rounded-full shadow-clay-well border-2 border-on-surface/5 ${heights[height]} overflow-hidden p-1`}>
       <div
         className="h-full rounded-full bg-primary shadow-clay-primary transition-all duration-1000 ease-[cubic-bezier(0.34,1.56,0.64,1)] relative overflow-hidden"
         style={{ width: `${pct}%` }}
@@ -216,9 +242,9 @@ export function StatCard({ title, value, sub, icon: Icon, color = 'primary', onC
     <Card hover={!!onClick} onClick={onClick} className="p-8 group">
       <div className="flex items-center justify-between gap-6">
         <div className="space-y-1">
-          <p className="text-[10px] font-black text-on-surface-variant uppercase tracking-[0.2em] opacity-60 leading-none mb-2">{title}</p>
+          <p className="text-[10px] font-black text-on-surface-variant uppercase tracking-[0.2em] leading-none mb-2">{title}</p>
           <p className="text-4xl font-mono-num font-black text-on-surface tracking-tighter leading-none">{value}</p>
-          {sub && <p className="text-xs font-bold text-on-surface-variant mt-3 opacity-90">{sub}</p>}
+          {sub && <p className="text-xs font-bold text-on-surface-variant mt-3">{sub}</p>}
         </div>
         {Icon && (
           <div className={`w-16 h-16 rounded-3xl flex items-center justify-center transition-all duration-500 group-hover:scale-110 shadow-clay ${color === 'primary' ? 'bg-primary text-on-primary' : 'bg-secondary text-on-secondary'}`}>
@@ -231,16 +257,51 @@ export function StatCard({ title, value, sub, icon: Icon, color = 'primary', onC
 }
 
 // ── Modal ────────────────────────────────────────────────────────────────
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]';
+
 export function Modal({ open, onClose, title, children, footer }) {
+  const titleId = useId();
+  const dialogRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // Le focus entre dans la fenêtre, y reste, puis revient sur le bouton d'origine.
+  useEffect(() => {
+    if (!open) return undefined;
+    const previous = /** @type {HTMLElement | null} */ (document.activeElement);
+    dialogRef.current?.focus();
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') onCloseRef.current?.();
+      if (e.key !== 'Tab' || !dialogRef.current) return;
+      const items = [...dialogRef.current.querySelectorAll(FOCUSABLE)];
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || active === dialogRef.current)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      previous?.focus?.();
+    };
+  }, [open]);
+
   if (!open) return null;
   // Rendue sur <body> pour passer au-dessus de la barre latérale, mais sous les toasts (z-[100]).
   return createPortal(
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-6 sm:p-12">
       <div className="absolute inset-0 bg-black/50 dark:bg-black/80 backdrop-blur-xl animate-fade-in" onClick={onClose} />
-      <div className="relative bg-background dark:bg-surface-container-low w-full max-w-xl max-h-[85vh] rounded-[3rem] shadow-2xl overflow-hidden flex flex-col animate-pop-in border-4 border-white/20">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="relative bg-background dark:bg-surface-container-low w-full max-w-xl max-h-[85vh] rounded-[3rem] shadow-2xl overflow-hidden flex flex-col animate-pop-in border-4 border-white/20">
         <div className="px-10 py-8 border-b border-on-surface/10 flex items-center justify-between">
-          <h2 className="text-2xl font-headline font-black text-on-surface tracking-tight">{title}</h2>
-          <button onClick={onClose} className="w-12 h-12 rounded-full bg-surface-container-highest flex items-center justify-center text-on-surface hover:bg-error hover:text-white transition-all active:scale-90 shadow-clay"><X size={24} /></button>
+          <h2 id={titleId} className="text-2xl font-headline font-black text-on-surface tracking-tight">{title}</h2>
+          <button type="button" onClick={onClose} aria-label="Fermer" className="w-12 h-12 rounded-full bg-surface-container-highest flex items-center justify-center text-on-surface hover:bg-error hover:text-on-error transition-all active:scale-90 shadow-clay"><X size={24} /></button>
         </div>
         <div className="flex-1 overflow-y-auto px-10 py-8 custom-scrollbar">{children}</div>
         {footer && <div className="px-10 py-8 bg-surface-container/50 border-t border-on-surface/10">{footer}</div>}
@@ -259,7 +320,7 @@ export function EmptyState({ icon: Icon, title, description, action }) {
       </div>
       <div className="space-y-2 max-w-sm mx-auto">
         <h3 className="text-3xl font-headline font-black text-on-surface tracking-tight">{title}</h3>
-        <p className="text-on-surface-variant font-medium opacity-80 leading-relaxed">{description}</p>
+        <p className="text-on-surface-variant font-medium leading-relaxed">{description}</p>
       </div>
       {action}
     </div>
@@ -268,19 +329,23 @@ export function EmptyState({ icon: Icon, title, description, action }) {
 
 // ── Toast ────────────────────────────────────────────────────────────────
 export function Toast({ toast }) {
-  if (!toast) return null;
   const configs = {
     success: { bg: 'bg-primary text-on-primary shadow-clay-primary', Icon: CheckCircle },
     error:   { bg: 'bg-error text-on-error shadow-clay', Icon: XCircle },
     info:    { bg: 'bg-secondary text-on-secondary shadow-clay-secondary', Icon: Info },
   };
-  const { bg, Icon } = configs[toast.type] || configs.info;
+  const { bg, Icon } = (toast && configs[toast.type]) || configs.info;
+  // La zone reste montée : un lecteur d'écran n'annonce que les changements d'une zone existante.
   return (
-    <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[300] w-max max-w-[90vw] animate-pop-in">
-      <div className={`${bg} rounded-3xl px-10 py-5 flex items-center gap-4 border-2 border-white/30 shadow-2xl scale-110`}>
-        <Icon size={24} strokeWidth={3} className="shrink-0" />
-        <p className="text-lg font-black tracking-tight leading-none">{toast.message}</p>
-      </div>
+    <div role="status" aria-live="polite">
+      {toast && (
+        <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[300] w-max max-w-[90vw] animate-pop-in">
+          <div className={`${bg} rounded-3xl px-10 py-5 flex items-center gap-4 border-2 border-white/30 shadow-2xl scale-110`}>
+            <Icon size={24} strokeWidth={3} className="shrink-0" aria-hidden="true" />
+            <p className="text-lg font-black tracking-tight leading-none">{toast.message}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -303,12 +368,12 @@ export function Amount({ value, size = 'md' }) {
 export function Checkbox({ label, checked, onChange }) {
   return (
     <label className="flex items-center gap-4 cursor-pointer group select-none">
-      <div className={`w-8 h-8 rounded-xl border-2 flex items-center justify-center transition-all duration-300
+      <div className={`w-8 h-8 rounded-xl border-2 flex items-center justify-center transition-all duration-300 group-focus-within:ring-2 group-focus-within:ring-primary group-focus-within:ring-offset-2
         ${checked ? 'bg-primary border-primary shadow-clay-primary' : 'bg-surface-container-highest border-on-surface/10 shadow-clay-well group-hover:border-primary/50'}`}>
         {checked && <Check size={20} className="text-on-primary" strokeWidth={3} />}
       </div>
-      {label && <span className="text-base font-bold text-on-surface opacity-80 group-hover:opacity-100 transition-opacity">{label}</span>}
-      <input type="checkbox" className="hidden" checked={checked} onChange={e => onChange(e.target.checked)} />
+      {label && <span className="text-base font-bold text-on-surface">{label}</span>}
+      <input type="checkbox" className="sr-only" checked={checked} onChange={e => onChange(e.target.checked)} />
     </label>
   );
 }
@@ -316,12 +381,12 @@ export function Checkbox({ label, checked, onChange }) {
 export function Radio({ label, name, value, checked, onChange }) {
   return (
     <label className="flex items-center gap-4 cursor-pointer group select-none">
-      <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all duration-300
+      <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all duration-300 group-focus-within:ring-2 group-focus-within:ring-primary group-focus-within:ring-offset-2
         ${checked ? 'bg-primary border-primary shadow-clay-primary' : 'bg-surface-container-highest border-on-surface/10 shadow-clay-well group-hover:border-primary/50'}`}>
         {checked && <div className="w-3.5 h-3.5 rounded-full bg-on-primary shadow-sm" />}
       </div>
-      {label && <span className="text-base font-bold text-on-surface opacity-80 group-hover:opacity-100 transition-opacity">{label}</span>}
-      <input type="radio" className="hidden" name={name} value={value} checked={checked} onChange={() => onChange(value)} />
+      {label && <span className="text-base font-bold text-on-surface">{label}</span>}
+      <input type="radio" className="sr-only" name={name} value={value} checked={checked} onChange={() => onChange(value)} />
     </label>
   );
 }

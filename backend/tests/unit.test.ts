@@ -8,6 +8,7 @@ import {
   submitChoreSchema,
 } from '../src/validation';
 import { assertTestDatabase } from './support/testDatabase';
+import { assertEmailConfig, assertStrongSecret } from '../src/config';
 
 describe('readAuthCookie', () => {
   it.each([
@@ -142,6 +143,7 @@ describe('configuration de démarrage', () => {
 
   it('refuse de démarrer en production sans CLIENT_URL', async () => {
     vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('JWT_SECRET', 'a1'.repeat(32));
     vi.stubEnv('CLIENT_URL', '');
     await expect(importServer()).rejects.toThrow(/CLIENT_URL/);
   });
@@ -159,5 +161,33 @@ describe('configuration de démarrage', () => {
   it('refuse un fuseau horaire invalide', async () => {
     vi.stubEnv('APP_TIMEZONE', 'Mars/Olympus');
     await expect(importServer()).rejects.toThrow();
+  });
+});
+
+describe('assertStrongSecret', () => {
+  it.each(['change-me-in-production', 'your-super-secret-jwt-key-change-in-production', 'court'])(
+    'refuse %s',
+    value => {
+      expect(() => assertStrongSecret('JWT_SECRET', value)).toThrow();
+    },
+  );
+
+  it('accepte un secret généré', () => {
+    expect(() => assertStrongSecret('JWT_SECRET', 'a1'.repeat(32))).not.toThrow();
+  });
+});
+
+describe('assertEmailConfig', () => {
+  it.each([
+    ['clé absente', { EMAIL_FROM: 'PocketMoney <a@pocketmoney.fr>' }],
+    ['expéditeur absent', { RESEND_API_KEY: 're_x' }],
+    ['expéditeur de test Resend', { RESEND_API_KEY: 're_x', EMAIL_FROM: 'PocketMoney <onboarding@resend.dev>' }],
+  ])('refuse : %s', (_label, env) => {
+    expect(() => assertEmailConfig(env as NodeJS.ProcessEnv)).toThrow();
+  });
+
+  it('accepte une clé et un domaine vérifié', () => {
+    const env = { RESEND_API_KEY: 're_x', EMAIL_FROM: 'PocketMoney <a@pocketmoney.fr>' };
+    expect(() => assertEmailConfig(env as unknown as NodeJS.ProcessEnv)).not.toThrow();
   });
 });
