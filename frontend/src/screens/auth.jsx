@@ -503,7 +503,7 @@ export function SignUp() {
               <Checkbox
                 checked={acceptTerms}
                 onChange={setAcceptTerms}
-                label={<>J'accepte les <Link to="/terms" className="text-primary underline">conditions d'utilisation</Link> et la <Link to="/privacy" className="text-primary underline">politique de confidentialité</Link>.</>}
+                label={<>J'accepte les <Link to="/terms" target="_blank" rel="noopener" className="text-primary underline">conditions d'utilisation</Link> et la <Link to="/privacy" target="_blank" rel="noopener" className="text-primary underline">politique de confidentialité</Link>.</>}
               />
               <Checkbox
                 checked={parentalConsent}
@@ -515,7 +515,7 @@ export function SignUp() {
 
           {mode === 'child' && (
             <p className="text-xs text-on-surface-variant">
-              En créant ton compte avec le code donné par ton parent, tu rejoins sa famille. <Link to="/privacy" className="text-primary underline">Comment tes données sont protégées</Link>.
+              En créant ton compte avec le code donné par ton parent, tu rejoins sa famille. <Link to="/privacy" target="_blank" rel="noopener" className="text-primary underline">Comment tes données sont protégées</Link>.
             </p>
           )}
 
