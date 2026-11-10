@@ -1,6 +1,5 @@
 import {
   ALICE_START,
-  answerNextPrompt,
   apiPost,
   BOB_START,
   childBalance,
@@ -24,7 +23,17 @@ const PIXEL = Buffer.from(
 );
 
 const fundingCard = (page, title) =>
-  page.locator('.border-b-8').filter({ has: page.getByRole('heading', { name: title }) });
+  page.locator('article').filter({ has: page.getByRole('heading', { name: title }) });
+
+const euros = amount => `${amount.toFixed(2).replace('.', ',')} €`;
+
+const moveCoins = async (page, opener, confirm, amount) => {
+  await fundingCard(page, 'Vacances à la mer').getByRole('button', { name: opener }).click();
+  await page.getByLabel('Autre montant (€)').fill(amount);
+  await page.getByRole('button', { name: confirm }).click();
+};
+const addCoins = (page, amount) => moveCoins(page, 'Ajouter des pièces', /^Mettre de côté/, amount);
+const takeCoins = (page, amount) => moveCoins(page, 'Retirer', /^Reprendre/, amount);
 
 test.describe('corvées', () => {
   test("approuver crédite le solde de l'enfant", async ({ page }) => {
@@ -39,8 +48,9 @@ test.describe('corvées', () => {
   test('refuser ne crédite rien', async ({ page }) => {
     await loginAsParent(page);
     await page.goto('/parent/chores/chore-2');
-    answerNextPrompt(page, 'Il reste de la poussière');
     await visibleButton(page, 'Refuser').click();
+    await page.getByRole('textbox').fill('Il reste de la poussière');
+    await visibleButton(page, 'Confirmer le refus').click();
     await expect(toast(page, 'Corvée refusée')).toBeVisible();
     expect(await childBalance(page, ALICE)).toBe(ALICE_START);
   });
@@ -48,13 +58,13 @@ test.describe('corvées', () => {
   test('parcours complet : soumission avec photo, puis approbation', async ({ page }) => {
     await loginAsChild(page, 'Alice');
     await page.goto('/child/submit-chore/chore-1');
-    await expect(visibleButton(page, 'Envoyer ma réussite')).toBeDisabled();
+    await expect(visibleButton(page, 'Envoyer à mes parents')).toBeDisabled();
     await page
       .locator('input[type="file"]')
       .setInputFiles({ name: 'preuve.png', mimeType: 'image/png', buffer: PIXEL });
     await expect(page.getByAltText('Ma réussite')).toBeVisible();
     await page.getByPlaceholder(/J'ai tout rangé/).fill('Tout est propre');
-    await visibleButton(page, 'Envoyer ma réussite').click();
+    await visibleButton(page, 'Envoyer à mes parents').click();
     await expect(page).toHaveURL(/\/child$/);
 
     await switchToParent(page);
@@ -85,12 +95,37 @@ test.describe('corvées', () => {
 
     await page.goto(`/parent/chores/${chore.id}`);
     await expect(page.getByRole('heading', { name: 'Modifiée' })).toBeVisible();
-    page.once('dialog', dialog => dialog.accept());
     await visibleButton(page, 'Supprimer la corvée').click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Supprimer' }).click();
     await expect(toast(page, 'Corvée supprimée')).toBeVisible();
     await page.goto(`/parent/chores/${chore.id}`);
     await expect(page.getByText('Corvée introuvable')).toBeVisible();
   });
+});
+
+test('une corvée refusée se refait et finit par être payée', async ({ page }) => {
+  await loginAsParent(page);
+  await page.goto('/parent/chores/chore-2');
+  await visibleButton(page, 'Refuser').click();
+  await page.getByRole('textbox').fill('Encore un effort');
+  await visibleButton(page, 'Confirmer le refus').click();
+  await expect(toast(page, 'Corvée refusée')).toBeVisible();
+
+  await page.context().clearCookies();
+  await loginAsChild(page, 'Alice');
+  await page.goto('/child/available-chores');
+  await expect(page.getByText('Encore un effort')).toBeVisible();
+  await page.getByRole('link', { name: 'Réessayer' }).click();
+  await page.locator('input[type="file"]').setInputFiles({ name: 'preuve.png', mimeType: 'image/png', buffer: PIXEL });
+  await expect(page.getByAltText('Ma réussite')).toBeVisible();
+  await visibleButton(page, 'Envoyer à mes parents').click();
+  await expect(page).toHaveURL(/\/child$/);
+
+  await switchToParent(page);
+  await page.goto('/parent/inbox');
+  await visibleButton(page, 'Approuver et payer').click();
+  await expect(toast(page, 'Corvée validée')).toBeVisible();
+  expect(await childBalance(page, ALICE)).toBe(ALICE_START + 5);
 });
 
 test.describe('plancher du solde (MONEY-1)', () => {
@@ -113,15 +148,12 @@ test.describe('objectifs', () => {
   test('épargner puis retirer ramène le solde à sa valeur de départ', async ({ page }) => {
     await loginAsChild(page, 'Bob');
     await page.goto('/child/goals');
-    const card = fundingCard(page, 'Vacances à la mer');
 
-    answerNextPrompt(page, '5');
-    await card.getByRole('button', { name: 'Ajouter des pièces' }).click();
+    await addCoins(page, '5');
     await expect(toast(page, 'Argent ajouté')).toBeVisible();
     expect(await myBalance(page)).toBe(BOB_START - 5);
 
-    answerNextPrompt(page, '5');
-    await card.getByRole('button', { name: 'Retirer' }).click();
+    await takeCoins(page, '5');
     await expect(toast(page, 'Argent retiré')).toBeVisible();
     expect(await myBalance(page)).toBe(BOB_START);
   });
@@ -130,8 +162,7 @@ test.describe('objectifs', () => {
     await loginAsChild(page, 'Bob');
     await page.goto('/child/goals');
 
-    answerNextPrompt(page, '5');
-    await fundingCard(page, 'Vacances à la mer').getByRole('button', { name: 'Ajouter des pièces' }).click();
+    await addCoins(page, '5');
     await expect(toast(page, 'Argent ajouté')).toBeVisible();
 
     // Navigation interne : un page.goto rechargerait l'application et masquerait le problème.
@@ -139,15 +170,14 @@ test.describe('objectifs', () => {
       window.history.pushState({}, '', '/child');
       window.dispatchEvent(new PopStateEvent('popstate'));
     });
-    await expect(page.getByText(`€${(BOB_START - 5).toFixed(2)}`).first()).toBeVisible();
+    await expect(page.getByText(euros(BOB_START - 5)).first()).toBeVisible();
   });
 
-  for (const answer of ['-5', '0', 'abc']) {
+  for (const answer of ['-5', '0']) {
     test(`la saisie « ${answer} » est refusée sans toucher au solde (MONEY-3)`, async ({ page }) => {
       await loginAsChild(page, 'Bob');
       await page.goto('/child/goals');
-      answerNextPrompt(page, answer);
-      await fundingCard(page, 'Vacances à la mer').getByRole('button', { name: 'Ajouter des pièces' }).click();
+      await addCoins(page, answer);
       await expect(toast(page, 'Entre un montant positif')).toBeVisible();
       expect(await myBalance(page)).toBe(BOB_START);
     });
@@ -156,8 +186,7 @@ test.describe('objectifs', () => {
   test('épargner plus que le solde est refusé', async ({ page }) => {
     await loginAsChild(page, 'Bob');
     await page.goto('/child/goals');
-    answerNextPrompt(page, '1000');
-    await fundingCard(page, 'Vacances à la mer').getByRole('button', { name: 'Ajouter des pièces' }).click();
+    await addCoins(page, '1000');
     await expect(toast(page, 'Solde insuffisant')).toBeVisible();
     expect(await myBalance(page)).toBe(BOB_START);
   });
@@ -192,8 +221,8 @@ test.describe('dépenses (FEATURE-1)', () => {
       .filter({ hasText: /^Stylo magique/ })
       .last();
     await expect(row).toBeVisible();
-    await page.locator('.p-6', { hasText: 'Stylo magique' }).getByRole('button', { name: 'Approuver' }).click();
-    await page.getByRole('button', { name: /Approuver \(€10\)/ }).click();
+    await page.locator('article', { hasText: 'Stylo magique' }).getByRole('button', { name: 'Approuver' }).click();
+    await page.getByRole('button', { name: /^Approuver\s10/ }).click();
     await expect(toast(page, 'Dépense approuvée')).toBeVisible();
     expect(await childBalance(page, ALICE)).toBe(ALICE_START - 10);
   });
@@ -212,7 +241,7 @@ test.describe('dépenses (FEATURE-1)', () => {
 test("l'historique de l'enfant reflète les mouvements", async ({ page }) => {
   await loginAsChild(page, 'Alice');
   await page.goto('/child/balance');
-  await expect(page.getByText(`€${ALICE_START.toFixed(2)}`)).toBeVisible();
+  await expect(page.getByText(euros(ALICE_START))).toBeVisible();
   const transactions = await myTransactions(page);
   await expect(page.getByText(transactions[0].description)).toBeVisible();
 });

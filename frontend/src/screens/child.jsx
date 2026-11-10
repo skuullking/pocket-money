@@ -1,204 +1,209 @@
-import React, { useState, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import React, { useRef, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ArrowDownRight, ArrowUpRight, Camera, Check, ChevronRight, Clock, ListChecks, Lock, LogOut, ShoppingBag, Target, Trophy, Wallet, Zap } from 'lucide-react';
 import { useCountUp } from '../hooks/useCountUp';
-import {
-  Target, Plus, Camera, Upload, Check, X, Clock,
-  TrendingUp, TrendingDown, ChevronRight, ArrowUpRight,
-  ArrowDownRight, LogOut, Award, Star, Gift, Zap,
-  ListChecks, Wallet, CheckCircle, XCircle, AlertCircle,
-  Gamepad2, Bike, Music, Smartphone, Flame, Trophy,
-  MoreHorizontal, Edit3, ShoppingBag, Lock
-} from 'lucide-react';
 import { useApp } from '../context';
 import { compressProofImage } from '../proofImage';
 import { Layout } from '../components/layout';
 import {
-  Card, Btn, Badge, StatusBadge, Avatar, StatCard,
-  ProgressBar, Modal, Input, Textarea, Select, EmptyState, Amount,
+  Amount, Avatar, BigCoin, Btn, Card, Chip, Coin, CoinButton, CoinRow, CoinStack, EmptyState, Input,
+  Modal, Segmented, Spinner, StatusBadge, Textarea, ThemeToggle, euro, euroShort, formatDeadline,
 } from '../components/ui';
 
-const KID_PALETTE = [
-  { card: 'bg-white dark:bg-surface-container-high rounded-sticker shadow-sticker bubbly-card sticker-left cursor-pointer',  iconBg: 'bg-primary-container',   iconColor: 'text-primary',   rewardBg: 'bg-primary',   rewardText: 'text-on-primary' },
-  { card: 'bg-white dark:bg-surface-container-high rounded-sticker shadow-sticker bubbly-card sticker-right cursor-pointer',  iconBg: 'bg-secondary-container', iconColor: 'text-secondary', rewardBg: 'bg-secondary', rewardText: 'text-on-secondary' },
-  { card: 'bg-white dark:bg-surface-container-high rounded-sticker shadow-sticker bubbly-card sticker-left cursor-pointer',  iconBg: 'bg-tertiary-container',  iconColor: 'text-tertiary',  rewardBg: 'bg-tertiary',  rewardText: 'text-on-tertiary' },
-  { card: 'bg-primary-container rounded-sticker shadow-sticker bubbly-card sticker-right cursor-pointer',    iconBg: 'bg-white/70 dark:bg-black/20', iconColor: 'text-primary',   rewardBg: 'bg-primary',   rewardText: 'text-on-primary' },
-  { card: 'bg-secondary-container rounded-sticker shadow-sticker bubbly-card sticker-left cursor-pointer', iconBg: 'bg-white/70 dark:bg-black/20', iconColor: 'text-secondary', rewardBg: 'bg-secondary', rewardText: 'text-on-secondary' },
-  { card: 'bg-tertiary-container rounded-sticker shadow-sticker bubbly-card sticker-right cursor-pointer',  iconBg: 'bg-white/70 dark:bg-black/20', iconColor: 'text-tertiary',  rewardBg: 'bg-tertiary',  rewardText: 'text-on-tertiary' },
-];
+const formatDate = date => new Date(date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
 
+const myGoalsOf = (goals, user) => (goals || []).filter(g => g.participants?.some(p => p.childId === user.id) || g.childId === user.id);
+
+const heading = 'font-headline font-extrabold tracking-tight';
+
+// ── Accueil ───────────────────────────────────────────────────────────────
 export function ChildDashboard() {
-  const navigate = useNavigate();
-  const { user, chores, goals, transactions, loading } = useApp();
+  const { user, chores, goals, loading } = useApp();
   const animBalance = useCountUp(user?.balance ?? 0, 900);
 
-  if (loading || !user) {
-    return (
-      <Layout title="Chargement...">
-        <div className="flex items-center justify-center min-h-[50vh]">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-        </div>
-      </Layout>
-    );
-  }
+  if (loading || !user) return <Layout title="Chargement..."><Spinner /></Layout>;
 
-  const myChores = (chores || []).filter(c => c.assigneeId === user.id);
-  const available = myChores.filter(c => c.status === 'PENDING' || c.status === 'pending');
-  const myGoals = (goals || []).filter(g => g.participants?.some(p => p.childId === user.id) || g.childId === user.id);
-  const myTrans = (transactions || []).slice(0, 5);
-  const primaryGoal = myGoals[0];
+  const mine = (chores || []).filter(c => c.assigneeId === user.id);
+  const todo = mine.filter(c => c.status === 'PENDING' || c.status === 'REJECTED');
+  const next = todo.find(c => c.status === 'PENDING') || todo[0];
+  const waiting = mine.find(c => c.status === 'SUBMITTED');
+  const goal = myGoalsOf(goals, user)[0];
+  const monthDelta = user.monthDelta;
 
   return (
-    <Layout title={`Salut, ${user.name} !`}>
-      <div className="max-w-4xl mx-auto space-y-10 pb-12">
-        <div className="rounded-[3rem] p-10 relative overflow-hidden pop-in shadow-clay-primary border-t-8 border-white/20" style={{ background: `linear-gradient(135deg, ${user.color || '#835500'} 0%, ${user.color || '#835500'}ee 100%)` }}>
-          <div className="absolute top-0 right-0 w-80 h-80 rounded-full bg-white/20 -translate-y-32 translate-x-32 blur-3xl" />
-          <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-8">
-            <div className="text-center sm:text-left text-white">
-              <p className="text-white text-sm font-black uppercase tracking-[0.2em] mb-2">Mon Trésor</p>
-              <p className="font-mono-num font-black text-7xl tracking-tighter leading-none">
-                €{animBalance.toFixed(2)}
+    <Layout title={`Salut ${user.name} !`} bare>
+      <header className="relative bg-hero text-white px-5 pt-5 pb-[70px] overflow-hidden on-dark-field">
+        <div aria-hidden="true" className="absolute -left-12 top-28 w-32 h-32 rounded-full border-[14px] border-white/10" />
+        <div aria-hidden="true" className="absolute -right-8 top-10 w-24 h-24 rounded-full border-[12px] border-white/10" />
+        <div className="relative max-w-2xl mx-auto flex flex-col items-center gap-[22px]">
+          <div className="w-full flex items-center gap-3">
+            <Avatar letter={user.avatar || user.name.charAt(0)} color="#FFFFFF" size="sm" />
+            <h1 className={`${heading} text-[26px]`}>Salut {user.name} !</h1>
+          </div>
+          <BigCoin label="Mon trésor" value={euro(animBalance)} />
+          {typeof monthDelta === 'number' && monthDelta !== 0 && (
+            <div className={`flex items-center gap-1.5 px-3.5 py-[7px] rounded-full bg-white font-bold text-[15px] ${monthDelta > 0 ? 'text-[#0A6B4B]' : 'text-[#A32C13]'}`}>
+              {monthDelta > 0 ? <ArrowUpRight size={16} strokeWidth={2.6} aria-hidden="true" /> : <ArrowDownRight size={16} strokeWidth={2.6} aria-hidden="true" />}
+              <span>{monthDelta > 0 ? '+' : '−'}{euroShort(Math.abs(monthDelta))} ce mois-ci</span>
+            </div>
+          )}
+        </div>
+      </header>
+
+      <div className="relative max-w-2xl mx-auto px-4 -mt-[46px] flex flex-col gap-4">
+        {next ? (
+          <Card sticker as="section" className="p-[18px] flex flex-col gap-3.5">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-bold text-on-surface-variant">{next.status === 'REJECTED' ? 'À refaire' : 'Ta prochaine quête'}</span>
+              <Link to="/child/available-chores" className="text-sm font-bold text-primary py-1.5">
+                {todo.length > 1 ? `Voir les ${todo.length}` : 'Mes quêtes'}
+              </Link>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className={`${heading} text-2xl`}>{next.title}</h2>
+                {next.deadline && <p className="mt-1 text-[15px] text-on-surface-variant">{formatDeadline(next.deadline)}</p>}
+              </div>
+              <Coin>+{euroShort(next.reward)}</Coin>
+            </div>
+            <Link to={`/child/submit-chore/${next.id}`} className={`${heading} flex items-center justify-center min-h-[56px] rounded-2xl bg-primary text-on-primary shadow-press text-lg active:translate-y-1 active:shadow-none transition-all`}>
+              Je l'ai faite
+            </Link>
+          </Card>
+        ) : (
+          <Card sticker as="section" className="p-6 text-center">
+            <p className={`${heading} text-xl`}>Toutes les quêtes sont finies !</p>
+          </Card>
+        )}
+
+        {waiting && (
+          <Link to="/child/available-chores" className="flex items-center gap-3 px-3.5 py-3 min-h-[48px] rounded-2xl bg-primary-container text-on-primary-container">
+            <Clock size={22} strokeWidth={2.2} aria-hidden="true" />
+            <span className="flex-1 text-[15px] font-semibold">{waiting.title} : tes parents vérifient</span>
+            <span className="font-bold text-[15px]">+{euroShort(waiting.reward)}</span>
+          </Link>
+        )}
+
+        {goal && (
+          <Link to="/child/goals">
+            <Card sticker as="section" className="p-[18px] flex flex-col gap-3">
+              <div className="flex items-baseline justify-between gap-3">
+                <h2 className={`${heading} text-xl`}>{goal.title}</h2>
+                <span className="text-[15px] font-bold text-on-surface-variant">{Math.min(100, Math.round((goal.current / goal.target) * 100))} %</span>
+              </div>
+              <CoinRow value={goal.current} max={goal.target} />
+              <p className="text-[15px] text-on-surface-variant">
+                {goal.current >= goal.target
+                  ? 'Rêve atteint, bravo !'
+                  : <>Encore <strong className="text-on-surface">{euro(goal.target - goal.current)}</strong> et c'est à toi.</>}
               </p>
-              {typeof user.monthDelta === 'number' && user.monthDelta !== 0 && (
-                <div className="mt-6 flex flex-wrap justify-center sm:justify-start gap-3">
-                   <div className="bg-white/20 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/30 text-xs font-bold flex items-center gap-2">
-                      <Star size={14} className="text-gold" fill="currentColor" />
-                      {user.monthDelta >= 0 ? '+' : ''}€{user.monthDelta.toFixed(2)} ce mois
-                   </div>
-                </div>
-              )}
-            </div>
-            <div className="w-32 h-32 rounded-[2.5rem] bg-white/20 backdrop-blur-lg flex items-center justify-center border-4 border-white/40 shadow-2xl animate-float">
-              <span className="text-white text-6xl">{user.avatar}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-          <div className="space-y-6">
-            <div className="flex items-center justify-between px-2">
-              <h3 className="font-headline font-black text-2xl text-on-surface tracking-tighter">Mes Quêtes</h3>
-              <button onClick={() => navigate('/child/available-chores')} className="text-sm font-bold text-primary hover:underline">Voir tout</button>
-            </div>
-            <div className="space-y-4">
-              {available.length === 0 ? (
-                <Card className="p-8 text-center border-2 border-dashed border-on-surface/5">
-                  <p className="font-headline font-extrabold text-on-surface tracking-tight">Toutes les quêtes sont finies !</p>
-                </Card>
-              ) : (
-                available.slice(0, 3).map((chore, i) => {
-                  const pal = KID_PALETTE[i % KID_PALETTE.length];
-                  return (
-                    <Card key={chore.id} hover className={`p-6 ${pal.card} group transition-all`} onClick={() => navigate(`/child/submit-chore/${chore.id}`)}>
-                      <div className="flex items-center gap-5">
-                        <div className={`w-14 h-14 rounded-2xl ${pal.iconBg} flex items-center justify-center ${pal.iconColor} shadow-inner group-hover:scale-110 transition-transform`}>
-                          <Zap size={28} fill="currentColor" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-headline font-extrabold text-on-surface text-lg leading-tight truncate">{chore.title}</h4>
-                          <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mt-1">Gagne <span className={pal.iconColor}>€{chore.reward}</span></p>
-                        </div>
-                        <ChevronRight size={20} className="text-on-surface-variant/30 group-hover:translate-x-1 transition-transform" />
-                      </div>
-                    </Card>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-10">
-            {primaryGoal && (
-              <div className="space-y-6">
-                <h3 className="font-headline font-black text-2xl text-on-surface tracking-tighter px-2">Mon Rêve</h3>
-                <Card className="p-8 bg-white dark:bg-surface-container-high border-b-8 border-secondary">
-                  <div className="flex items-center gap-6 mb-6">
-                    <div className="w-16 h-16 rounded-2xl bg-secondary-container flex items-center justify-center text-secondary text-3xl shadow-inner animate-pulse">
-                      {primaryGoal.icon}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-headline font-extrabold text-xl text-on-surface truncate tracking-tight">{primaryGoal.title}</p>
-                      <div className="flex justify-between items-end mt-1">
-                         <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Progression</p>
-                         <p className="font-mono-num font-black text-secondary">€{primaryGoal.current} / €{primaryGoal.target}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <ProgressBar value={primaryGoal.current} max={primaryGoal.target} color="success" height="lg" />
-                  <Btn full variant="outline" className="mt-8 h-12" onClick={() => navigate('/child/goals')}>Gérer mes objectifs</Btn>
-                </Card>
-              </div>
-            )}
-
-            <div className="space-y-6">
-              <h3 className="font-headline font-black text-2xl text-on-surface tracking-tighter px-2">Activités</h3>
-              <div className="bg-white/40 dark:bg-white/5 rounded-[2.5rem] p-2 space-y-1">
-                {myTrans.map(t => (
-                  <div key={t.id} className="flex items-center gap-4 p-4 rounded-3xl hover:bg-white/60 dark:hover:bg-white/10 transition-colors group">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-inner ${t.amount >= 0 ? 'bg-secondary-container/40 text-secondary' : 'bg-error-container/40 text-error'}`}>
-                      {t.amount >= 0 ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold text-on-surface text-sm truncate">{t.description}</p>
-                      <p className="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest">{new Date(t.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}</p>
-                    </div>
-                    <Amount value={t.amount} size="sm" />
-                  </div>
-                ))}
-                {myTrans.length === 0 && <p className="text-center py-10 text-on-surface-variant italic text-sm">Pas encore de mouvements.</p>}
-              </div>
-            </div>
-          </div>
-        </div>
+            </Card>
+          </Link>
+        )}
       </div>
     </Layout>
   );
 }
 
-export function AvailableChores() {
-  const navigate = useNavigate();
+// ── Quêtes ────────────────────────────────────────────────────────────────
+const QUEST_TABS = [
+  { value: 'todo', label: 'À faire' },
+  { value: 'sent', label: 'Envoyées' },
+  { value: 'done', label: 'Gagnées' },
+];
+
+function QuestBoard({ initialTab }) {
   const { user, chores, loading } = useApp();
-  if (loading || !user) return <Layout title="Quêtes"><div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div></div></Layout>;
-  const myChores = (chores || []).filter(c => c.assigneeId === user.id && (c.status === 'PENDING' || c.status === 'pending'));
+  const [tab, setTab] = useState(initialTab);
+
+  if (loading || !user) return <Layout title="Mes quêtes"><Spinner /></Layout>;
+
+  const mine = (chores || []).filter(c => c.assigneeId === user.id);
+  const rejected = mine.filter(c => c.status === 'REJECTED');
+  const pending = mine.filter(c => c.status === 'PENDING');
+  const sent = mine.filter(c => c.status === 'SUBMITTED');
+  const done = mine.filter(c => c.status === 'COMPLETED');
 
   return (
-    <Layout title="Quêtes Disponibles" showBack onBack={() => navigate('/child')}>
-      <div className="max-w-3xl mx-auto space-y-6 pb-20">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {myChores.map((chore, ci) => {
-            const pal = KID_PALETTE[ci % KID_PALETTE.length];
-            return (
-              <Card key={chore.id} hover className={`p-8 ${pal.card} group relative overflow-hidden`} onClick={() => navigate(`/child/submit-chore/${chore.id}`)}>
-                <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-125 transition-transform"><Zap size={80} /></div>
-                <div className="relative z-10 flex flex-col gap-6">
-                   <div className={`w-16 h-16 rounded-[1.5rem] ${pal.iconBg} flex items-center justify-center ${pal.iconColor} shadow-inner`}>
-                      <Zap size={32} fill="currentColor" />
-                   </div>
-                   <div>
-                      <h4 className="font-headline font-black text-2xl text-on-surface tracking-tighter leading-tight mb-2">{chore.title}</h4>
-                      <p className="text-on-surface-variant font-medium text-sm line-clamp-3 leading-relaxed">{chore.description}</p>
-                   </div>
-                   <div className="mt-auto flex items-center justify-between pt-6 border-t border-black/5 dark:border-white/5">
-                      <div className="flex items-center gap-2 text-xs font-black text-on-surface-variant uppercase tracking-widest">
-                         <Clock size={16} /> {chore.deadline}
-                      </div>
-                      <span className={`font-mono-num font-black text-xl px-4 py-2 rounded-2xl shadow-clay ${pal.rewardBg} ${pal.rewardText}`}>+€{chore.reward}</span>
-                   </div>
+    <Layout title="Mes quêtes">
+      <div className="space-y-[18px]">
+        <Segmented label="Filtrer mes quêtes" options={QUEST_TABS} value={tab} onChange={setTab} />
+
+        {tab === 'todo' && (
+          <div className="flex flex-col gap-3">
+            {rejected.map(chore => (
+              <div key={chore.id} className="flex flex-col gap-2.5 p-3.5 rounded-[18px] bg-error-container text-on-error-container">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold text-sm">À refaire</span>
+                  <span className="font-bold text-[15px]">+{euroShort(chore.reward)}</span>
                 </div>
-              </Card>
-            );
-          })}
-        </div>
-        {myChores.length === 0 && (
-          <div className="py-20 text-center space-y-6">
-             <div className="w-24 h-24 rounded-full bg-secondary-container mx-auto flex items-center justify-center text-secondary shadow-clay animate-bounce">
-                <Trophy size={48} />
-             </div>
-             <h3 className="font-headline font-black text-3xl tracking-tighter">Héros au repos !</h3>
-             <Btn onClick={() => navigate('/child')}>Retour au tableau de bord</Btn>
+                <h2 className={`${heading} text-xl`}>{chore.title}</h2>
+                <p className="text-[15px] leading-snug">
+                  {chore.rejectionReason ? `Message de tes parents : « ${chore.rejectionReason} »` : 'Tes parents te demandent de la refaire.'}
+                </p>
+                <Link to={`/child/submit-chore/${chore.id}`} className="flex items-center justify-center min-h-[48px] rounded-[14px] bg-secondary text-on-secondary font-bold">
+                  Réessayer
+                </Link>
+              </div>
+            ))}
+            {pending.map(chore => (
+              <Link key={chore.id} to={`/child/submit-chore/${chore.id}`}>
+                <Card sticker className="flex items-center gap-3 p-4">
+                  <span className="flex-1 min-w-0">
+                    <span className={`${heading} block text-xl`}>{chore.title}</span>
+                    {chore.deadline && <span className="block mt-1 text-[15px] text-on-surface-variant">{formatDeadline(chore.deadline)}</span>}
+                  </span>
+                  <Coin size="sm">+{euroShort(chore.reward)}</Coin>
+                </Card>
+              </Link>
+            ))}
+            {rejected.length + pending.length === 0 && (
+              <EmptyState icon={Trophy} title="Héros au repos !" description="Tu as fini toutes tes quêtes." />
+            )}
+          </div>
+        )}
+
+        {tab === 'sent' && (
+          <div className="flex flex-col gap-3">
+            {sent.map(chore => (
+              <div key={chore.id} className="flex flex-col gap-1.5 p-[18px] rounded-[20px] bg-primary-container text-on-primary-container">
+                <h2 className={`${heading} text-xl`}>{chore.title}</h2>
+                <p className="text-[15px] leading-snug">Tes parents regardent ta photo. Tu gagneras {euroShort(chore.reward)} dès qu'ils auront validé.</p>
+              </div>
+            ))}
+            {sent.length === 0 && <EmptyState icon={Clock} title="Rien en attente" description="Les quêtes envoyées à tes parents apparaîtront ici." />}
+          </div>
+        )}
+
+        {tab === 'done' && (
+          <div className="flex flex-col gap-2">
+            {done.map(chore => (
+              <div key={chore.id} className="flex items-center gap-3 px-4 py-3.5 rounded-[18px] bg-surface">
+                <span className="w-9 h-9 flex-shrink-0 rounded-full bg-gain-container text-gain flex items-center justify-center">
+                  <Check size={20} strokeWidth={3} aria-hidden="true" />
+                </span>
+                <span className="flex-1 min-w-0 font-bold">{chore.title}</span>
+                <span className="font-bold text-gain">+{euroShort(chore.reward)}</span>
+              </div>
+            ))}
+            {done.length === 0 && <EmptyState icon={ListChecks} title="Aucun exploit" description="C'est le moment de commencer ta première quête !" />}
           </div>
         )}
       </div>
     </Layout>
+  );
+}
+
+export const AvailableChores = () => <QuestBoard initialTab="todo" />;
+export const MyChores = () => <QuestBoard initialTab="done" />;
+
+// ── Valider une quête ─────────────────────────────────────────────────────
+function StepTitle({ number, children }) {
+  return (
+    <h2 className={`${heading} flex items-center gap-2.5 text-xl`}>
+      <span className="w-[30px] h-[30px] rounded-full bg-secondary text-on-secondary flex items-center justify-center text-base">{number}</span>
+      {children}
+    </h2>
   );
 }
 
@@ -211,10 +216,11 @@ export function SubmitChore() {
   const [note, setNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileRef = useRef();
+  const back = () => navigate('/child/available-chores');
 
-  if (!chore) return <Layout title="Erreur" showBack onBack={() => navigate('/child')}><div className="text-center py-20"><p className="font-bold">Corvée non trouvée</p></div></Layout>;
+  if (!chore) return <Layout title="Erreur" showBack onBack={() => navigate('/child')}><p className="text-center py-20 font-bold">Corvée non trouvée</p></Layout>;
 
-  const handleFile = async (e) => {
+  const handleFile = async e => {
     const input = e.target;
     const file = input.files[0];
     if (!file) return;
@@ -228,231 +234,176 @@ export function SubmitChore() {
       setIsSubmitting(false);
     }
   };
-const handleSubmit = async () => {
-  if (!photo) return;
-  setIsSubmitting(true);
-  try {
-    await submitChore(chore.id, { note, proofImageUrl: photo });
-    navigate('/child');
-  } catch (e) {
-    console.error("Submission failed", e);
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+
+  const handleSubmit = async () => {
+    if (!photo) return;
+    setIsSubmitting(true);
+    try {
+      await submitChore(chore.id, { note, proofImageUrl: photo });
+      navigate('/child');
+    } catch (e) {
+      console.error('Submission failed', e);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
-    <Layout title="Valider ma quête" showBack onBack={() => navigate('/child/available-chores')}>
-      <div className="max-w-2xl mx-auto space-y-8 pt-6">
-        <Card className="p-8 text-center border-t-8 border-primary relative overflow-hidden">
-          <div className="relative z-10">
-            <p className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-4">Mission à accomplir</p>
-            <h2 className="font-headline font-black text-4xl text-on-surface mb-6 tracking-tighter leading-none">{chore.title}</h2>
-            <div className="inline-flex bg-primary text-on-primary font-mono-num font-black text-3xl px-8 py-4 rounded-[2rem] shadow-clay-primary">+€{chore.reward}</div>
+    <Layout title="Valider ma quête" showBack onBack={back}>
+      <div className="space-y-[18px]">
+        <section className="flex items-center justify-between gap-3 p-5 rounded-[22px] bg-hero text-white">
+          <div className="min-w-0">
+            <h2 className={`${heading} text-[30px] leading-[1.05]`}>{chore.title}</h2>
+            {chore.description && <p className="mt-1.5 text-[15px] leading-snug">{chore.description}</p>}
           </div>
-        </Card>
+          <Coin size="lg" className="shadow-press">+{euroShort(chore.reward)}</Coin>
+        </section>
 
-        <div className="space-y-6">
-          <div className="bg-white dark:bg-surface-container-high rounded-[2.5rem] shadow-sticker p-8">
-            <div className="text-lg font-headline font-black text-on-surface mb-6 flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl text-primary"><Camera size={24} /></div>
-              Preuve en image
-            </div>
-            {photo ? (
-              <div className="relative rounded-[2rem] overflow-hidden shadow-2xl group border-4 border-white dark:border-surface-container-highest">
-                <img src={photo} alt="Ma réussite" className="w-full h-80 object-cover" />
-                <button onClick={() => setPhoto(null)} aria-label="Retirer la photo" className="absolute top-5 right-5 p-4 bg-error text-on-error rounded-full shadow-2xl active:scale-90 transition-transform"><X size={24} strokeWidth={3} /></button>
-              </div>
-            ) : (
-              <button onClick={() => fileRef.current?.click()} className="w-full border-4 border-dashed border-on-surface/5 rounded-[2.5rem] py-20 flex flex-col items-center justify-center gap-6 hover:bg-primary/5 hover:border-primary/20 transition-all group">
-                <div className="w-20 h-20 rounded-full bg-surface-variant flex items-center justify-center text-on-surface-variant group-hover:scale-110 group-hover:bg-primary group-hover:text-on-primary transition-all shadow-inner"><Camera size={40} /></div>
-                <div className="text-center space-y-1">
-                  <p className="font-headline font-black text-xl text-on-surface">Prendre une photo</p>
-                </div>
-              </button>
-            )}
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
-          </div>
-          <Textarea label="Un message pour tes parents ?" placeholder="ex: J'ai tout rangé avec soin ! ✨" value={note} onChange={e => setNote(e.target.value)} className="h-32 text-lg" />
-          <div className="pt-6 pb-12">
-             <Btn full size="lg" loading={isSubmitting} onClick={handleSubmit} disabled={!photo} className="h-20 text-xl shadow-clay-primary">Envoyer ma réussite !</Btn>
-          </div>
-        </div>
-      </div>
-    </Layout>
-  );
-}
-
-export function MyChores() {
-  const navigate = useNavigate();
-  const { user, chores, loading } = useApp();
-  if (loading || !user) return <Layout title="Mon historique"><div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div></div></Layout>;
-  const myChores = (chores || []).filter(c => c.assigneeId === user.id);
-
-  return (
-    <Layout title="Mes Exploits" showBack onBack={() => navigate('/child')}>
-      <div className="max-w-3xl mx-auto space-y-4 pb-20">
-        {myChores.map(chore => (
-          <Card key={chore.id} className="p-6 transition-all hover:translate-x-2" onClick={() => chore.status === 'PENDING' && navigate(`/child/submit-chore/${chore.id}`)}>
-            <div className="flex items-center justify-between gap-6">
-              <div className="flex items-center gap-5">
-                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-inner ${chore.status === 'COMPLETED' ? 'bg-secondary-container text-secondary' : 'bg-surface-variant text-on-surface-variant opacity-50'}`}><Check size={24} strokeWidth={3} /></div>
-                 <div>
-                    <h4 className="font-headline font-extrabold text-on-surface text-lg tracking-tight">{chore.title}</h4>
-                    <StatusBadge status={chore.status} />
-                 </div>
-              </div>
-              <span className="font-mono-num font-black text-2xl text-primary tracking-tighter">€{chore.reward}</span>
-            </div>
-          </Card>
-        ))}
-        {myChores.length === 0 && <EmptyState icon={ListChecks} title="Aucun exploit" description="C'est le moment de commencer ta première quête !" />}
-      </div>
-    </Layout>
-  );
-}
-
-export function BalanceScreen() {
-  const navigate = useNavigate();
-  const { user, transactions, loading } = useApp();
-  if (loading || !user) return <Layout title="Mon Trésor"><div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div></div></Layout>;
-  const myTrans = transactions || [];
-
-  return (
-    <Layout title="Mon Trésor" showBack onBack={() => navigate('/child')}>
-      <div className="max-w-2xl mx-auto space-y-10 pb-20">
-        <div className="bg-primary rounded-[3rem] p-12 text-on-primary text-center shadow-clay-primary border-t-8 border-white/20 relative overflow-hidden">
-          <p className="text-on-primary text-xs font-black uppercase tracking-[0.3em] mb-4">Total accumulé</p>
-          <p className="text-7xl font-mono-num font-black tracking-tighter">€{user.balance?.toFixed(2)}</p>
-        </div>
-
-        {user.settings?.splitEnabled && (
-          <div className="grid grid-cols-3 gap-4">
-            <div className="bg-white dark:bg-surface-container-high rounded-[2rem] p-6 text-center shadow-clay">
-              <p className="text-[10px] font-black text-on-surface-variant uppercase tracking-widest mb-2">Dépense</p>
-              <p className="text-2xl font-mono-num font-black text-on-surface">€{(user.spendBalance ?? 0).toFixed(2)}</p>
-            </div>
-            <div className="bg-white dark:bg-surface-container-high rounded-[2rem] p-6 text-center shadow-clay">
-              <p className="text-[10px] font-black text-secondary uppercase tracking-widest mb-2">Épargne</p>
-              <p className="text-2xl font-mono-num font-black text-on-surface">€{(user.saveBalance ?? 0).toFixed(2)}</p>
-            </div>
-            <div className="bg-white dark:bg-surface-container-high rounded-[2rem] p-6 text-center shadow-clay">
-              <p className="text-[10px] font-black text-tertiary uppercase tracking-widest mb-2">Don</p>
-              <p className="text-2xl font-mono-num font-black text-on-surface">€{(user.giveBalance ?? 0).toFixed(2)}</p>
-            </div>
-          </div>
+        {chore.status === 'REJECTED' && chore.rejectionReason && (
+          <p className="p-3.5 rounded-[14px] bg-error-container text-on-error-container text-[15px] leading-snug">
+            Message de tes parents : « {chore.rejectionReason} »
+          </p>
         )}
 
-        <div className="space-y-6">
-          <h3 className="font-headline font-black text-2xl text-on-surface tracking-tighter px-2 text-center">Historique des pièces</h3>
-          <div className="space-y-3">
-            {myTrans.map(t => (
-              <div key={t.id} className="flex items-center gap-5 p-6 bg-white dark:bg-surface-container-high rounded-[2rem] shadow-clay border border-on-surface/5 group hover:scale-[1.02] transition-transform">
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-inner ${t.amount >= 0 ? 'bg-secondary-container/40 text-secondary' : 'bg-error-container/40 text-error'}`}>
-                   {t.amount >= 0 ? <ArrowUpRight size={28} /> : <ArrowDownRight size={28} />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-headline font-extrabold text-on-surface text-lg truncate tracking-tight">{t.description}</p>
-                  <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">{new Date(t.date).toLocaleDateString()}</p>
-                </div>
-                <Amount value={t.amount} size="md" />
-              </div>
-            ))}
-            {myTrans.length === 0 && <EmptyState icon={Wallet} title="Tirelire vide" description="Pas encore de transactions." />}
-          </div>
+        <section className="space-y-3">
+          <StepTitle number={1}>Montre ta réussite</StepTitle>
+          {photo ? (
+            <div className="relative rounded-[22px] overflow-hidden border-2 border-line">
+              <img src={photo} alt="Ma réussite" className="w-full h-[250px] object-cover" />
+              <button type="button" onClick={() => setPhoto(null)} aria-label="Retirer la photo" className="absolute right-3 bottom-3 min-h-[44px] px-4 rounded-xl bg-[#1A1640] text-white font-bold text-[15px]">
+                Reprendre
+              </button>
+            </div>
+          ) : (
+            <button type="button" onClick={() => fileRef.current?.click()} className="w-full h-[250px] flex flex-col items-center justify-center gap-3 rounded-[22px] border-[3px] border-dashed border-primary bg-surface">
+              <span className="w-[72px] h-[72px] rounded-full bg-primary-container text-on-primary-container flex items-center justify-center">
+                <Camera size={34} strokeWidth={2.2} aria-hidden="true" />
+              </span>
+              <span className={`${heading} text-xl`}>Prendre une photo</span>
+            </button>
+          )}
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} aria-label="Photo de la quête" />
+        </section>
+
+        <section className="space-y-3">
+          <StepTitle number={2}>Un mot pour tes parents ?</StepTitle>
+          <Textarea aria-label="Ton message, facultatif" placeholder="ex: J'ai tout rangé avec soin !" value={note} onChange={e => setNote(e.target.value)} />
+        </section>
+
+        <div className="space-y-2.5 pt-2">
+          {!photo && <p className="text-center text-[15px] text-on-surface-variant">Ajoute une photo pour pouvoir envoyer.</p>}
+          <Btn full size="lg" variant="gold" loading={isSubmitting} disabled={!photo} onClick={handleSubmit}>Envoyer à mes parents</Btn>
         </div>
       </div>
     </Layout>
   );
 }
+
+// ── Rêves ─────────────────────────────────────────────────────────────────
+const COIN_AMOUNTS = [1, 2, 5, 10];
 
 export function GoalsScreen() {
-  const navigate = useNavigate();
   const { goals, user, loading, fundGoal, withdrawFromGoal } = useApp();
-  if (loading || !user) return <Layout title="Objectifs"><div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div></div></Layout>;
+  const [sheet, setSheet] = useState(null); // { goal, mode: 'fund' | 'withdraw' }
+  const [amount, setAmount] = useState('');
+
+  if (loading || !user) return <Layout title="Mes rêves"><Spinner /></Layout>;
+
   const myGoals = goals || [];
+  const open = (goal, mode) => { setAmount(''); setSheet({ goal, mode }); };
+  const close = () => setSheet(null);
+  const funding = sheet?.mode === 'fund';
+  const value = parseFloat(amount) || 0;
+
+  const confirm = () => {
+    const { goal } = sheet;
+    (funding ? fundGoal : withdrawFromGoal)(goal.id, amount);
+    close();
+  };
 
   return (
-    <Layout title="Mes Grands Rêves" showBack onBack={() => navigate('/child')}>
-      <div className="max-w-4xl mx-auto space-y-8 pb-20">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {myGoals.map(goal => (
-            <Card key={goal.id} className="p-8 relative overflow-hidden border-b-8 border-secondary">
-              <div className="relative z-10 space-y-6">
-                <div className="flex items-center gap-6">
-                  <div className="w-20 h-20 rounded-[1.5rem] bg-secondary-container flex items-center justify-center text-secondary text-4xl shadow-inner animate-float">{goal.icon}</div>
-                  <div className="flex-1">
-                    <h4 className="font-headline font-black text-2xl text-on-surface tracking-tighter leading-tight">{goal.title}</h4>
-                    <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mt-1">{goal.isShared ? 'Objectif Partagé' : 'Objectif Personnel'}</p>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                   <div className="flex justify-between items-end">
-                      <p className="text-xs font-black text-primary uppercase tracking-widest">Épargne</p>
-                      <p className="font-mono-num font-black text-2xl text-on-surface">€{goal.current} <span className="text-on-surface-variant text-sm font-medium">/ €{goal.target}</span></p>
-                   </div>
-                   <ProgressBar value={goal.current} max={goal.target} color="success" height="lg" />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <Btn variant="secondary" className="h-12" disabled={goal.status === 'COMPLETED'} onClick={() => {
-                    const amount = window.prompt("Combien souhaites-tu épargner ?");
-                    if (amount) fundGoal(goal.id, amount);
-                  }}>Ajouter des pièces</Btn>
-                  <Btn variant="outline" className="h-12" disabled={!goal.current || goal.status === 'COMPLETED'} onClick={() => {
-                    const amount = window.prompt("Combien souhaites-tu retirer ?");
-                    if (amount) withdrawFromGoal(goal.id, amount);
-                  }}>Retirer</Btn>
+    <Layout title="Mes rêves">
+      <Modal
+        open={!!sheet}
+        onClose={close}
+        title={funding ? 'Combien de pièces ?' : 'Combien reprendre ?'}
+        footer={
+          <Btn full size="lg" disabled={amount === ''} onClick={confirm}>
+            {funding ? 'Mettre de côté' : 'Reprendre'}{value > 0 ? ` ${euroShort(value)}` : ''}
+          </Btn>
+        }
+      >
+        <div className="space-y-4 pb-1">
+          <div className="flex justify-between">
+            {COIN_AMOUNTS.map(v => (
+              <CoinButton key={v} active={value === v} onClick={() => setAmount(String(v))}>{euroShort(v)}</CoinButton>
+            ))}
+          </div>
+          <Input label="Autre montant (€)" type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} />
+          <p className="text-center text-base text-on-surface-variant">
+            {funding
+              ? <>Il te restera <strong className="text-on-surface">{euro(Math.max(0, (user.balance || 0) - value))}</strong> à dépenser</>
+              : <>Déjà de côté : <strong className="text-on-surface">{euro(sheet?.goal.current)}</strong></>}
+          </p>
+        </div>
+      </Modal>
+
+      <p className="-mt-4 mb-5 text-base text-on-surface-variant">Empile tes pièces jusqu'en haut.</p>
+
+      <div className="flex flex-col gap-4">
+        {myGoals.map(goal => {
+          const locked = goal.status === 'COMPLETED';
+          const reached = goal.current >= goal.target;
+          return (
+            <Card key={goal.id} sticker as="article" className="p-[18px] flex flex-col gap-4">
+              <div className="flex gap-[18px] items-end">
+                <CoinStack value={goal.current} max={goal.target} />
+                <div className="flex-1 min-w-0 flex flex-col gap-1">
+                  <span className="text-sm font-bold text-on-surface-variant">{goal.isShared ? 'Rêve partagé' : 'Rêve perso'}</span>
+                  <h2 className={`${heading} text-2xl leading-[1.05]`}><span aria-hidden="true">{goal.icon} </span><span>{goal.title}</span></h2>
+                  <p className={`${heading} mt-1.5 text-[22px]`}>
+                    {euroShort(goal.current)} <span className="font-body font-medium text-base text-on-surface-variant">sur {euroShort(goal.target)}</span>
+                  </p>
+                  <p className={`text-[15px] font-semibold ${reached ? 'text-gain' : 'text-on-surface-variant'}`}>
+                    {reached ? 'Rêve atteint, bravo !' : `Encore ${euro(goal.target - goal.current)}`}
+                  </p>
                 </div>
               </div>
+              <div className="flex gap-2.5">
+                <Btn variant="gold" className="flex-1" disabled={locked} onClick={() => open(goal, 'fund')}>Ajouter des pièces</Btn>
+                <Btn variant="outline" disabled={!goal.current || locked} onClick={() => open(goal, 'withdraw')}>Retirer</Btn>
+              </div>
             </Card>
-          ))}
-        </div>
-        {myGoals.length === 0 && <EmptyState icon={Target} title="C'est le moment de rêver" description="Quel sera ton prochain grand projet ?" />}
+          );
+        })}
       </div>
+      {myGoals.length === 0 && <EmptyState icon={Target} title="C'est le moment de rêver" description="Quel sera ton prochain grand projet ?" />}
     </Layout>
   );
 }
 
-export function ProfileScreen() {
-  const navigate = useNavigate();
-  const { user, logout, loading } = useApp();
-  if (loading || !user) return <Layout title="Profil"><div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div></div></Layout>;
+// ── Demande de dépense ────────────────────────────────────────────────────
+const EXPENSE_TYPES = [
+  { value: 'ONLINE', label: 'En ligne' },
+  { value: 'CASH', label: 'Liquide' },
+  { value: 'OTHER', label: 'Autre' },
+];
+const EMPTY_EXPENSE = { title: '', description: '', amount: '', expenseType: 'ONLINE', reference: '' };
 
-  return (
-    <Layout title="Mon Espace" showBack onBack={() => navigate('/child')}>
-      <div className="max-w-2xl mx-auto space-y-10 pb-20 text-center">
-        <div className="w-40 h-40 mx-auto rounded-[3rem] bg-white/40 dark:bg-white/10 flex items-center justify-center border-4 border-primary/20 shadow-clay">
-            <span className="text-8xl">{user.avatar}</span>
-        </div>
-        <h2 className="text-5xl font-headline font-black text-on-surface tracking-tighter">{user.name}</h2>
-        <Btn full variant="outline" className="h-14" icon={ShoppingBag} onClick={() => navigate('/child/expenses')}>Mes demandes de dépense</Btn>
-        <Btn full variant="ghost" className="h-16 text-lg text-error hover:bg-error-container/20" icon={LogOut} onClick={() => { logout(); navigate('/welcome'); }}>Quitter PocketMoney</Btn>
-      </div>
-    </Layout>
-  );
-}
-
-// ── Expense Requests Screen (child) ──────────────────────────────────────
-export function ExpensesScreen() {
-  const navigate = useNavigate();
-  const { user, expenses, loading, requestExpense } = useApp();
-  const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState({ title: '', description: '', amount: '', expenseType: 'ONLINE', reference: '' });
+function ExpenseSheet({ open, onClose }) {
+  const { user, requestExpense } = useApp();
+  const [form, setForm] = useState(EMPTY_EXPENSE);
   const [busy, setBusy] = useState(false);
+  const frozen = !!user?.settings?.frozen;
 
-  if (loading || !user) return <Layout title="Mes Dépenses"><div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div></div></Layout>;
-
-  const myExpenses = expenses || [];
-  const frozen = !!user.settings?.frozen;
-
-  const handleSubmit = async (e) => {
+  const handleSubmit = async e => {
     e.preventDefault();
     if (frozen || !form.title || !form.amount) return;
     setBusy(true);
     try {
       await requestExpense({ ...form, amount: parseFloat(form.amount) || 0 });
-      setForm({ title: '', description: '', amount: '', expenseType: 'ONLINE', reference: '' });
-      setModalOpen(false);
+      setForm(EMPTY_EXPENSE);
+      onClose();
     } catch {
       // requestExpense a déjà affiché le refus : le formulaire reste ouvert.
     } finally {
@@ -461,61 +412,189 @@ export function ExpensesScreen() {
   };
 
   return (
-    <Layout
-      title="Mes Dépenses"
-      showBack
-      onBack={() => navigate('/child')}
-      headerRight={<Btn size="sm" icon={Plus} disabled={frozen} onClick={() => setModalOpen(true)}>Demander</Btn>}
-    >
-      <Modal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title="Nouvelle demande de dépense"
-        footer={<Btn full loading={busy} onClick={handleSubmit}>Envoyer la demande</Btn>}
-      >
-        <form className="space-y-5" onSubmit={handleSubmit}>
-          <Input label="Quoi ?" placeholder="ex: Livre Harry Potter" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required />
-          <Textarea label="Description (optionnel)" placeholder="Précise un peu..." value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
-          <Input label="Montant (€)" type="number" min="0" step="0.1" prefix="€" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} required />
-          <Select
-            label="Type"
-            value={form.expenseType}
-            onChange={e => setForm(f => ({ ...f, expenseType: e.target.value }))}
-            options={[
-              { label: 'Achat en ligne', value: 'ONLINE' },
-              { label: 'Argent liquide', value: 'CASH' },
-              { label: 'Autre', value: 'OTHER' },
-            ]}
-          />
-          <Input label="Lien / référence (optionnel)" placeholder="ex: amazon.fr/..." value={form.reference} onChange={e => setForm(f => ({ ...f, reference: e.target.value }))} />
-        </form>
-      </Modal>
+    <Modal open={open} onClose={onClose} title="Que veux-tu acheter ?" footer={<Btn full size="lg" loading={busy} onClick={handleSubmit}>Envoyer la demande</Btn>}>
+      <form className="space-y-4 pb-1" onSubmit={handleSubmit}>
+        <Input label="Quoi ?" placeholder="ex: Livre Harry Potter" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required />
+        <Input label="Combien (€) ?" type="number" min="0" step="0.01" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} required />
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[15px] font-bold">Comment ?</span>
+          <div className="flex flex-wrap gap-2">
+            {EXPENSE_TYPES.map(t => (
+              <Chip key={t.value} active={form.expenseType === t.value} onClick={() => setForm(f => ({ ...f, expenseType: t.value }))}>{t.label}</Chip>
+            ))}
+          </div>
+        </div>
+        <Textarea label="Pourquoi ? (facultatif)" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+        <Input label="Lien ou référence (facultatif)" placeholder="ex: amazon.fr/..." value={form.reference} onChange={e => setForm(f => ({ ...f, reference: e.target.value }))} />
+      </form>
+    </Modal>
+  );
+}
 
-      <div className="max-w-2xl mx-auto space-y-4 pb-20">
-        {frozen && (
-          <Card className="p-6 bg-error-container/20 border-2 border-error/20 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-error/10 flex items-center justify-center text-error flex-shrink-0"><Lock size={22} /></div>
-            <p className="text-sm font-bold text-on-surface">Ton compte est gelé par un parent — impossible de faire une nouvelle demande pour le moment.</p>
-          </Card>
-        )}
-        {myExpenses.length === 0 && (
-          <EmptyState icon={ShoppingBag} title="Aucune demande" description="Envie de quelque chose ? Demande à tes parents." action={!frozen && <Btn onClick={() => setModalOpen(true)}>Faire une demande</Btn>} />
-        )}
-        {myExpenses.map(expense => (
-          <Card key={expense.id} className="p-6">
-            <div className="flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <p className="font-headline font-extrabold text-on-surface truncate">{expense.title}</p>
-                <p className="text-xs text-on-surface-variant font-bold uppercase mt-1">{expense.expenseType}</p>
-                {expense.parentNote && <p className="text-sm text-on-surface-variant italic mt-2">"{expense.parentNote}"</p>}
+function FrozenNotice() {
+  return (
+    <div className="flex items-center gap-3 p-4 rounded-[18px] bg-error-container text-on-error-container">
+      <Lock size={22} className="flex-shrink-0" aria-hidden="true" />
+      <p className="text-[15px] font-semibold">Ton compte est gelé par un parent : impossible de faire une nouvelle demande pour le moment.</p>
+    </div>
+  );
+}
+
+function ExpenseRow({ expense }) {
+  return (
+    <div className="flex flex-col gap-1.5 px-4 py-3.5 rounded-[18px] bg-surface">
+      <div className="flex items-center justify-between gap-2.5">
+        <span className="font-bold">{expense.title}</span>
+        <span className="flex-shrink-0 font-bold">{euroShort(expense.approvedAmount ?? expense.amount)}</span>
+      </div>
+      <div><StatusBadge status={expense.status} /></div>
+      {expense.parentNote && <p className="text-[15px] leading-snug text-on-surface-variant">{expense.parentNote}</p>}
+    </div>
+  );
+}
+
+// ── Trésor ────────────────────────────────────────────────────────────────
+export function BalanceScreen() {
+  const { user, transactions, expenses, loading } = useApp();
+  const [requesting, setRequesting] = useState(false);
+
+  if (loading || !user) return <Layout title="Mon trésor"><Spinner /></Layout>;
+
+  const history = transactions || [];
+  const requests = (expenses || []).slice(0, 3);
+  const frozen = !!user.settings?.frozen;
+  const parts = [
+    { label: 'Dépense', value: user.spendBalance ?? 0, color: 'bg-gold' },
+    { label: 'Épargne', value: user.saveBalance ?? 0, color: 'bg-[#8E7CFF]' },
+    { label: 'Don', value: user.giveBalance ?? 0, color: 'bg-white' },
+  ];
+  const total = parts.reduce((sum, p) => sum + p.value, 0);
+
+  return (
+    <Layout title="Mon trésor" bare>
+      <ExpenseSheet open={requesting} onClose={() => setRequesting(false)} />
+      <header className="bg-[#1A1640] text-white px-5 pt-6 pb-[22px] on-dark-field">
+        <div className="max-w-2xl mx-auto flex flex-col gap-4">
+          <h1 className="text-base font-semibold">Mon trésor</h1>
+          <p className={`${heading} text-[60px] leading-none text-gold`}>{euro(user.balance)}</p>
+          {user.settings?.splitEnabled && (
+            <>
+              {total > 0 && (
+                <div role="img" aria-label={parts.map(p => `${p.label} ${euro(p.value)}`).join(', ')} className="flex gap-[3px] h-3 rounded-md overflow-hidden">
+                  {parts.filter(p => p.value > 0).map(p => <div key={p.label} className={p.color} style={{ flex: p.value }} />)}
+                </div>
+              )}
+              <div className="grid grid-cols-3 gap-2">
+                {parts.map(p => (
+                  <div key={p.label}>
+                    <p className="text-sm text-[#D9D5F2]">{p.label}</p>
+                    <p className="font-bold text-[17px]">{euro(p.value)}</p>
+                  </div>
+                ))}
               </div>
-              <div className="text-right flex-shrink-0 space-y-2">
-                <p className="font-mono-num font-black text-primary">€{expense.approvedAmount ?? expense.amount}</p>
-                <StatusBadge status={expense.status} />
-              </div>
+            </>
+          )}
+        </div>
+      </header>
+
+      <div className="max-w-2xl mx-auto px-4 pt-[18px] flex flex-col gap-[22px]">
+        {frozen && <FrozenNotice />}
+        <Btn full size="lg" variant="gold" icon={ShoppingBag} disabled={frozen} onClick={() => setRequesting(true)}>Demander à dépenser</Btn>
+
+        {requests.length > 0 && (
+          <section className="flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <h2 className={`${heading} text-[22px]`}>Mes demandes</h2>
+              <Link to="/child/expenses" className="text-[15px] font-bold text-primary py-2">Tout voir</Link>
             </div>
-          </Card>
-        ))}
+            {requests.map(expense => <ExpenseRow key={expense.id} expense={expense} />)}
+          </section>
+        )}
+
+        <section className="flex flex-col gap-0.5">
+          <h2 className={`${heading} text-[22px] mb-2`}>Dernières pièces</h2>
+          {history.map(t => (
+            <div key={t.id} className="flex items-center gap-3 py-2 min-h-[44px]">
+              <span className={`w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center ${t.amount >= 0 ? 'bg-gain-container text-gain' : 'bg-error-container text-error'}`}>
+                {t.amount >= 0 ? <ArrowUpRight size={18} strokeWidth={2.6} aria-hidden="true" /> : <ArrowDownRight size={18} strokeWidth={2.6} aria-hidden="true" />}
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="block font-semibold">{t.description}</span>
+                <span className="block text-sm text-on-surface-variant">{formatDate(t.date)}</span>
+              </span>
+              <Amount value={t.amount} />
+            </div>
+          ))}
+          {history.length === 0 && <EmptyState icon={Wallet} title="Tirelire vide" description="Pas encore de transactions." />}
+        </section>
+      </div>
+    </Layout>
+  );
+}
+
+export function ExpensesScreen() {
+  const navigate = useNavigate();
+  const { user, expenses, loading } = useApp();
+  const [requesting, setRequesting] = useState(false);
+
+  if (loading || !user) return <Layout title="Mes demandes"><Spinner /></Layout>;
+
+  const list = expenses || [];
+  const frozen = !!user.settings?.frozen;
+  const ask = () => setRequesting(true);
+
+  return (
+    <Layout title="Mes demandes" showBack onBack={() => navigate('/child/balance')} headerRight={<Btn size="sm" disabled={frozen} onClick={ask}>Demander</Btn>}>
+      <ExpenseSheet open={requesting} onClose={() => setRequesting(false)} />
+      <div className="flex flex-col gap-2.5">
+        {frozen && <FrozenNotice />}
+        {list.length === 0 && (
+          <EmptyState icon={ShoppingBag} title="Aucune demande" description="Envie de quelque chose ? Demande à tes parents." action={!frozen && <Btn onClick={ask}>Faire une demande</Btn>} />
+        )}
+        {list.map(expense => <ExpenseRow key={expense.id} expense={expense} />)}
+      </div>
+    </Layout>
+  );
+}
+
+// ── Moi ───────────────────────────────────────────────────────────────────
+export function ProfileScreen() {
+  const navigate = useNavigate();
+  const { user, family, logout, loading, theme, toggleTheme } = useApp();
+
+  if (loading || !user) return <Layout title="Moi"><Spinner /></Layout>;
+
+  const rows = [
+    { to: '/child/my-chores', label: 'Mes quêtes gagnées', Icon: Zap },
+    { to: '/child/expenses', label: 'Mes demandes de dépense', Icon: ShoppingBag },
+  ];
+
+  return (
+    <Layout title="Moi" bare>
+      <div className="max-w-2xl mx-auto px-4 pt-10">
+        <header className="flex flex-col items-center gap-3 mb-[26px]">
+          <div className="coin-ridge w-[124px] h-[124px] rounded-full flex items-center justify-center shadow-press-lg">
+            <div className="w-[104px] h-[104px] rounded-full bg-surface text-[52px] flex items-center justify-center font-headline font-extrabold">{user.avatar || user.name.charAt(0)}</div>
+          </div>
+          <h1 className={`${heading} mt-2 text-[34px]`}>{user.name}</h1>
+          {family?.name && <p className="text-on-surface-variant">{family.name}</p>}
+        </header>
+
+        <nav aria-label="Mon espace" className="bg-surface border-2 border-line rounded-[22px] overflow-hidden">
+          {rows.map(({ to, label, Icon }) => (
+            <Link key={to} to={to} className="flex items-center gap-3 min-h-[64px] px-[18px] font-bold text-[17px] border-b border-outline-variant">
+              <Icon size={22} strokeWidth={2.2} className="text-primary" aria-hidden="true" />
+              <span className="flex-1">{label}</span>
+              <ChevronRight size={20} className="text-on-surface-variant" aria-hidden="true" />
+            </Link>
+          ))}
+          <div className="flex items-center justify-between gap-3 min-h-[64px] px-[18px] font-bold text-[17px]">
+            <span>Mode sombre</span>
+            <ThemeToggle theme={theme} onToggle={toggleTheme} />
+          </div>
+        </nav>
+
+        <Btn full variant="dangerGhost" icon={LogOut} className="mt-3" onClick={() => { logout(); navigate('/welcome'); }}>Quitter PocketMoney</Btn>
       </div>
     </Layout>
   );

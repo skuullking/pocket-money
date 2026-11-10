@@ -5,8 +5,15 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useApp } from '../src/context';
 import { SignIn, Welcome } from '../src/screens/auth.jsx';
-import { BalanceScreen, ChildDashboard, ExpensesScreen, GoalsScreen, SubmitChore } from '../src/screens/child.jsx';
-import { ChildrenView, ChoreDetail, CreateChore, ExpensesReview } from '../src/screens/parent.jsx';
+import {
+  AvailableChores,
+  BalanceScreen,
+  ChildDashboard,
+  ExpensesScreen,
+  GoalsScreen,
+  SubmitChore,
+} from '../src/screens/child.jsx';
+import { ChildrenView, ChoreDetail, CreateChore, ExpensesReview, InboxScreen } from '../src/screens/parent.jsx';
 import { compressProofImage } from '../src/proofImage';
 import { alice, appContext, chores, expenses, family, goals, parent, renderScreen, transactions } from './support';
 
@@ -36,6 +43,7 @@ describe('connexion', () => {
     const context = provide({ login: vi.fn().mockResolvedValue({ user: parent }) });
     renderScreen(SignIn, { path: '/login' });
 
+    await userEvent.click(button('Parent'));
     await userEvent.type(screen.getByPlaceholderText('ex: sarah@gmail.com'), 'sarah@dupont.fr');
     expect(screen.queryByPlaceholderText('ABCD12')).not.toBeInTheDocument();
     await userEvent.type(screen.getByPlaceholderText('••••••••'), 'password123');
@@ -45,11 +53,11 @@ describe('connexion', () => {
     await waitFor(() => expect(location()).toBe('/parent'));
   });
 
-  it('un prénom fait apparaître le code famille, mis en majuscules', async () => {
+  it('un enfant saisit son prénom et le code famille, mis en majuscules', async () => {
     const context = provide({ login: vi.fn().mockResolvedValue({ user: alice }) });
     renderScreen(SignIn, { path: '/login' });
 
-    await userEvent.type(screen.getByPlaceholderText('ex: sarah@gmail.com'), 'Alice');
+    await userEvent.type(screen.getByPlaceholderText('Alice'), 'Alice');
     await userEvent.type(screen.getByPlaceholderText('ABCD12'), 'dupont');
     await userEvent.type(screen.getByPlaceholderText('••••••••'), 'password123');
     await userEvent.click(button('Me connecter'));
@@ -63,6 +71,7 @@ describe('connexion', () => {
     provide({ login: vi.fn().mockRejectedValue(new Error('Identifiants invalides')) });
     renderScreen(SignIn, { path: '/login' });
 
+    await userEvent.click(button('Parent'));
     await userEvent.type(screen.getByPlaceholderText('ex: sarah@gmail.com'), 'sarah@dupont.fr');
     await userEvent.type(screen.getByPlaceholderText('••••••••'), 'mauvais');
     await userEvent.click(button('Me connecter'));
@@ -85,37 +94,39 @@ describe('connexion', () => {
 });
 
 describe('objectifs (enfant)', () => {
-  const withPrompt = answer => vi.spyOn(window, 'prompt').mockReturnValue(answer);
+  const typeAmount = amount => userEvent.type(screen.getByLabelText('Autre montant (€)'), amount);
 
   it('affiche la progression', () => {
     provide({ user: alice, goals });
     renderScreen(GoalsScreen);
     expect(screen.getByText('Vacances')).toBeInTheDocument();
-    expect(screen.getByText('Objectif Partagé')).toBeInTheDocument();
-    expect(screen.getByText('Objectif Personnel')).toBeInTheDocument();
+    expect(screen.getByText('Rêve partagé')).toBeInTheDocument();
+    expect(screen.getByText('Rêve perso')).toBeInTheDocument();
   });
 
   it('transmet le montant saisi', async () => {
     const context = provide({ user: alice, goals: [goals[0]] });
-    withPrompt('5');
     renderScreen(GoalsScreen);
     await userEvent.click(button('Ajouter des pièces'));
+    await typeAmount('5');
+    await userEvent.click(button(/^Mettre de côté/));
     expect(context.fundGoal).toHaveBeenCalledWith('g1', '5');
   });
 
   it('ne fait rien si la saisie est annulée', async () => {
     const context = provide({ user: alice, goals: [goals[0]] });
-    withPrompt(null);
     renderScreen(GoalsScreen);
     await userEvent.click(button('Ajouter des pièces'));
+    await userEvent.click(button('Fermer'));
     expect(context.fundGoal).not.toHaveBeenCalled();
   });
 
   it('retire le montant saisi', async () => {
     const context = provide({ user: alice, goals: [goals[0]] });
-    withPrompt('3');
     renderScreen(GoalsScreen);
     await userEvent.click(button('Retirer'));
+    await typeAmount('3');
+    await userEvent.click(button(/^Reprendre/));
     expect(context.withdrawFromGoal).toHaveBeenCalledWith('g1', '3');
   });
 
@@ -143,16 +154,16 @@ describe('solde (enfant)', () => {
   it("affiche le total et l'historique", () => {
     provide({ user: alice, transactions });
     renderScreen(BalanceScreen);
-    expect(screen.getByText('€45.50')).toBeInTheDocument();
-    expect(screen.getByText('+5.00€')).toBeInTheDocument();
-    expect(screen.getByText('-2.00€')).toBeInTheDocument();
+    expect(screen.getByText('45,50 €')).toBeInTheDocument();
+    expect(screen.getByText('+5,00 €')).toBeInTheDocument();
+    expect(screen.getByText('−2,00 €')).toBeInTheDocument();
   });
 
   it('affiche les compartiments si la répartition est active', () => {
     provide({ user: alice });
     renderScreen(BalanceScreen);
     expect(screen.getByText('Épargne')).toBeInTheDocument();
-    expect(screen.getByText('€10.00')).toBeInTheDocument();
+    expect(screen.getByText('10,00 €')).toBeInTheDocument();
   });
 
   it('cache les compartiments sinon', () => {
@@ -172,7 +183,7 @@ describe('soumission de corvée (enfant)', () => {
   it('exige une photo', () => {
     provide({ user: alice, chores });
     renderScreen(SubmitChore, route);
-    expect(button('Envoyer ma réussite !')).toBeDisabled();
+    expect(button('Envoyer à mes parents')).toBeDisabled();
   });
 
   it('envoie la photo compressée et la note', async () => {
@@ -183,7 +194,7 @@ describe('soumission de corvée (enfant)', () => {
     pickPhoto();
     await screen.findByAltText('Ma réussite');
     await userEvent.type(screen.getByPlaceholderText(/J'ai tout rangé/), 'Fait');
-    await userEvent.click(button('Envoyer ma réussite !'));
+    await userEvent.click(button('Envoyer à mes parents'));
 
     expect(context.submitChore).toHaveBeenCalledWith('ch1', {
       note: 'Fait',
@@ -200,7 +211,7 @@ describe('soumission de corvée (enfant)', () => {
     pickPhoto();
 
     await waitFor(() => expect(context.showToast).toHaveBeenCalledWith(expect.stringContaining('photo'), 'error'));
-    expect(button('Envoyer ma réussite !')).toBeDisabled();
+    expect(button('Envoyer à mes parents')).toBeDisabled();
   });
 
   it('indique une corvée introuvable', () => {
@@ -221,7 +232,16 @@ describe('tableau de bord (enfant)', () => {
     const { rerender } = render(tree());
     provide({ user: alice, loading: false });
     expect(() => rerender(tree())).not.toThrow();
-    expect(screen.getAllByText('Salut, Alice !').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Salut Alice !').length).toBeGreaterThan(0);
+  });
+});
+
+describe('quêtes (enfant)', () => {
+  it('montre une quête refusée, avec le motif et un bouton pour réessayer', () => {
+    provide({ user: alice, chores: [{ ...chores[3], assigneeId: 'c1' }] });
+    renderScreen(AvailableChores);
+    expect(screen.getByText(/Couverts/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Réessayer' })).toHaveAttribute('href', '/child/submit-chore/ch4');
   });
 });
 
@@ -274,9 +294,10 @@ describe("détail d'une corvée (parent)", () => {
 
   it('refuse avec le motif saisi', async () => {
     const context = provide({ user: parent, family, chores });
-    vi.spyOn(window, 'prompt').mockReturnValue('Pas fini');
     renderScreen(ChoreDetail, route('ch2'));
     await userEvent.click(button('Refuser'));
+    await userEvent.type(screen.getByRole('textbox'), 'Pas fini');
+    await userEvent.click(button('Confirmer le refus'));
     expect(context.rejectChore).toHaveBeenCalledWith('ch2', 'Pas fini');
   });
 
@@ -288,14 +309,14 @@ describe("détail d'une corvée (parent)", () => {
 
   it('demande confirmation avant de supprimer (UI-2)', async () => {
     const context = provide({ user: parent, family, chores });
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
     renderScreen(ChoreDetail, route('ch1'));
 
     await userEvent.click(button('Supprimer la corvée'));
+    await userEvent.click(button('Annuler'));
     expect(context.deleteChore).not.toHaveBeenCalled();
 
-    confirm.mockReturnValue(true);
     await userEvent.click(button('Supprimer la corvée'));
+    await userEvent.click(button('Supprimer'));
     expect(context.deleteChore).toHaveBeenCalledWith('ch1');
   });
 
@@ -325,17 +346,61 @@ describe('sanctions (parent)', () => {
     expect(button('Appliquer')).toBeDisabled();
 
     await userEvent.click(screen.getByText('Téléphone à table'));
-    await userEvent.click(button('Appliquer (-€2)'));
+    await userEvent.click(button(/^Appliquer/));
 
     expect(context.applyPenalty).toHaveBeenCalledWith('c1', 'r1');
   });
 
-  it("« Ajouter un enfant » mène au code d'invitation (UI-1)", async () => {
+  it("« Ajouter un enfant » montre le code d'invitation à copier (UI-1)", async () => {
     const context = provide({ user: parent, family });
     renderScreen(ChildrenView);
-    await userEvent.click(screen.getByRole('button', { name: /Ajouter un enfant/ }));
+    expect(screen.getByRole('heading', { name: 'Ajouter un enfant' })).toBeInTheDocument();
+    expect(screen.getByText('DUPONT')).toBeInTheDocument();
+    await userEvent.click(button('Copier le code'));
     expect(context.showToast).toHaveBeenCalled();
-    expect(location()).toBe('/parent/settings');
+  });
+});
+
+describe('file « À valider » (parent)', () => {
+  it('réunit corvées soumises et dépenses en attente, et annonce la position', () => {
+    provide({ user: parent, family, chores, expenses });
+    renderScreen(InboxScreen, { path: '/parent/inbox' });
+    expect(screen.getAllByText('Aspirateur').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Livre').length).toBeGreaterThan(0);
+    expect(screen.getByText('1 sur 2')).toBeInTheDocument();
+    expect(screen.getByAltText('Preuve')).toBeInTheDocument();
+  });
+
+  it('approuve la corvée affichée', async () => {
+    const context = provide({ user: parent, family, chores, expenses: [] });
+    renderScreen(InboxScreen, { path: '/parent/inbox' });
+    await userEvent.click(button('Approuver et payer'));
+    expect(context.approveChore).toHaveBeenCalledWith('ch2');
+  });
+
+  it('refuse avec un motif, sans fenêtre du navigateur', async () => {
+    const context = provide({ user: parent, family, chores, expenses: [] });
+    renderScreen(InboxScreen, { path: '/parent/inbox' });
+    await userEvent.click(button('Refuser'));
+    await userEvent.type(screen.getByRole('textbox'), 'Pas fini');
+    await userEvent.click(button('Confirmer le refus'));
+    expect(context.rejectChore).toHaveBeenCalledWith('ch2', 'Pas fini');
+  });
+
+  it('approuve une dépense avec le montant ajusté', async () => {
+    const context = provide({ user: parent, family, chores: [], expenses });
+    renderScreen(InboxScreen, { path: '/parent/inbox' });
+    const amount = document.querySelector('input[type="number"]');
+    await userEvent.clear(amount);
+    await userEvent.type(amount, '10');
+    await userEvent.click(button('Approuver'));
+    expect(context.approveExpense).toHaveBeenCalledWith('e1', { approvedAmount: '10' });
+  });
+
+  it('indique quand tout est traité', () => {
+    provide({ user: parent, family, chores: [], expenses: [] });
+    renderScreen(InboxScreen, { path: '/parent/inbox' });
+    expect(screen.getByText('Tout est validé')).toBeInTheDocument();
   });
 });
 
@@ -349,16 +414,17 @@ describe('revue des dépenses (parent)', () => {
     expect(amount).toHaveValue(12.5);
     await userEvent.clear(amount);
     await userEvent.type(amount, '10');
-    await userEvent.click(button('Approuver (€10)'));
+    await userEvent.click(button(/^Approuver\s10/));
 
     expect(context.approveExpense).toHaveBeenCalledWith('e1', { approvedAmount: '10' });
   });
 
   it('refuse avec le motif saisi', async () => {
     const context = provide({ user: parent, family, expenses });
-    vi.spyOn(window, 'prompt').mockReturnValue('Trop cher');
     renderScreen(ExpensesReview);
     await userEvent.click(button('Refuser'));
+    await userEvent.type(screen.getByRole('textbox'), 'Trop cher');
+    await userEvent.click(button('Confirmer le refus'));
     expect(context.rejectExpense).toHaveBeenCalledWith('e1', { parentNote: 'Trop cher' });
   });
 

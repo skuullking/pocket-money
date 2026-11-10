@@ -30,6 +30,7 @@ const SCREENS = [
   ['ForgotPassword', auth.ForgotPassword, null, route('/forgot-password')],
   ['ResetPassword', auth.ResetPassword, null, route('/reset-password')],
   ['ParentDashboard', parentScreens.ParentDashboard, parent, route('/parent')],
+  ['InboxScreen', parentScreens.InboxScreen, parent, route('/parent/inbox')],
   ['ChoresList', parentScreens.ChoresList, parent, route('/parent/chores')],
   ['ChoreDetail', parentScreens.ChoreDetail, parent, route('/parent/chores/:choreId', '/parent/chores/ch2')],
   ['CreateChore (création)', parentScreens.CreateChore, parent, route('/parent/chores/new')],

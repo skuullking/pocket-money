@@ -136,6 +136,20 @@ describe('refus de corvée', () => {
     expect(await balanceOf(child.id)).toBe(20);
   });
 
+  it('laisse l\'enfant refaire une corvée refusée, payée une seule fois', async () => {
+    const { parent, child } = await createFamily();
+    const chore = await createChore(child.id);
+    await as(parent).patch(`/api/chores/${chore.id}/reject`).send({ reason: 'Pas fini' }).expect(200);
+
+    await as(child).patch(`/api/chores/${chore.id}/submit`).send({ note: 'Refait' }).expect(200);
+    expect(await choreOf(chore.id)).toMatchObject({ status: 'SUBMITTED', rejectionReason: null, note: 'Refait' });
+
+    await as(parent).patch(`/api/chores/${chore.id}/approve`).expect(200);
+    await as(parent).patch(`/api/chores/${chore.id}/approve`).expect(409);
+    expect(await balanceOf(child.id)).toBe(25);
+    expect(await transactionsOf(child.id)).toHaveLength(1);
+  });
+
   it('ne permet pas de refuser une corvée déjà approuvée', async () => {
     const { parent, child } = await createFamily();
     const chore = await createChore(child.id);

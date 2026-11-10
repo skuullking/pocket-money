@@ -44,6 +44,7 @@ export { expect };
 
 export const loginAsParent = async page => {
   await page.goto('/login');
+  await page.getByRole('button', { name: 'Parent', exact: true }).click();
   await page.getByPlaceholder('ex: sarah@gmail.com').fill('sarah@dupont.fr');
   await page.getByPlaceholder('••••••••').fill(PASSWORD);
   await page.getByRole('button', { name: 'Me connecter' }).click();
@@ -52,7 +53,7 @@ export const loginAsParent = async page => {
 
 export const loginAsChild = async (page, name) => {
   await page.goto('/login');
-  await page.getByPlaceholder('ex: sarah@gmail.com').fill(name);
+  await page.getByPlaceholder('Alice').fill(name);
   await page.getByPlaceholder('ABCD12').fill(INVITE_CODE);
   await page.getByPlaceholder('••••••••').fill(PASSWORD);
   await page.getByRole('button', { name: 'Me connecter' }).click();
@@ -85,10 +86,6 @@ export const childBalance = async (page, childId) => {
 };
 
 export const myTransactions = async page => (await apiGet(page, '/transactions')).transactions;
-
-export const answerNextPrompt = (page, answer) => {
-  page.once('dialog', dialog => dialog.accept(answer));
-};
 
 export const visibleButton = (page, name) =>
   page.getByRole('button', { name, exact: false }).locator('visible=true').first();

@@ -718,8 +718,9 @@ const isFamilyChild = async (userId: unknown, familyId: string) => {
 // Le statut attendu est dans le `where` : de deux requêtes simultanées, une seule
 // modifie la ligne, ce qu'une lecture suivie d'un update ne garantirait pas.
 // `null` si la corvée n'est plus dans le statut attendu.
-const transitionChore = async (db: any, id: string, from: string, data: object) => {
-  const { count } = await db.chore.updateMany({ where: { id, status: from }, data });
+const transitionChore = async (db: any, id: string, from: string | string[], data: object) => {
+  const status = Array.isArray(from) ? { in: from } : from;
+  const { count } = await db.chore.updateMany({ where: { id, status }, data });
   return count === 1 ? db.chore.findUniqueOrThrow({ where: { id } }) : null;
 };
 
@@ -831,7 +832,8 @@ app.patch('/api/chores/:id/submit', authenticateToken, async (req: any, res) => 
     const existing = await findFamilyChore(req.params.id, req.user.familyId);
     if (!existing) return res.status(404).json({ error: 'Corvée non trouvée' });
     if (existing.assigneeId !== req.user.id) return res.status(403).json({ error: 'Interdit' });
-    const chore = await transitionChore(prisma, existing.id, 'PENDING', { status: 'SUBMITTED', note, proofImageUrl });
+    // Une corvée refusée peut être refaite : elle repart en validation, le paiement reste unique.
+    const chore = await transitionChore(prisma, existing.id, ['PENDING', 'REJECTED'], { status: 'SUBMITTED', note, proofImageUrl, rejectionReason: null });
     if (!chore) return res.status(409).json({ error: 'Cette corvée a déjà été soumise ou traitée' });
     emitToFamily(req.user.familyId, SocketEvents.CHORE_SUBMITTED, chore);
     res.json({ chore });

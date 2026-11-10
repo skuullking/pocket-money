@@ -71,14 +71,14 @@ Fail-fast config: in production the server refuses to start without `CLIENT_URL`
 
 `frontend/src/App.jsx` uses React Router v7. Screens live in four files:
 - `frontend/src/screens/auth.jsx` — Welcome, SignIn, SignUp, Splash
-- `frontend/src/screens/parent.jsx` — Dashboard, ChoresList, ChoreDetail, CreateChore, ChildrenView, RulesScreen, AnalyticsScreen, SettingsScreen
+- `frontend/src/screens/parent.jsx` — Dashboard, InboxScreen (chores and expenses awaiting approval), ChoresList, ChoreDetail, CreateChore, ChildrenView, RulesScreen, AnalyticsScreen, SettingsScreen
 - `frontend/src/screens/child.jsx` — Dashboard, AvailableChores, SubmitChore, MyChores, BalanceScreen, GoalsScreen, ProfileScreen
 - `frontend/src/screens/legal.jsx` — privacy policy and terms (`/privacy`, `/terms`), filled from the `VITE_LEGAL_*` build args
 
 ### Components
 
 - `frontend/src/components/layout.jsx` — responsive shell: Sidebar (desktop) / BottomNav (mobile), Layout, Toast
-- `frontend/src/components/ui.jsx` — shared primitives: `Btn`, `Badge`, `Card`, `Input`, `Modal`, `Toast`, `Avatar`, `ProgressBar`, `StatCard`, `Select`, `Amount`, `EmptyState`
+- `frontend/src/components/ui.jsx` — shared primitives: `Btn`, `Badge`, `Card`, `Input`, `Modal` (bottom sheet on mobile), `ConfirmModal`, `Toast`, `Avatar`, `Switch`, `Segmented`, `Chip`, `Coin`, `StatCard`, `Select`, `Amount`, `EmptyState`
 
 ### API
 
@@ -86,9 +86,11 @@ Fail-fast config: in production the server refuses to start without `CLIENT_URL`
 
 ### Styling
 
-Tailwind CSS with a custom theme (`frontend/tailwind.config.js`):
-- Claymorphism aesthetic (layered box-shadows for toy-like depth)
-- Fonts: Epilogue (headings), Plus Jakarta Sans (body), JetBrains Mono (numbers)
+Tailwind CSS with a custom theme (`frontend/tailwind.config.js`, colors as CSS variables in `frontend/src/index.css`, light and `.dark`):
+- "Pièce d'or" look: violet and gold, chunky buttons with a hard offset shadow (`shadow-press`), coins as the money metaphor (`Coin`, `BigCoin`, `CoinRow`, `CoinStack`)
+- Child screens use thick outlined cards (`Card sticker`); parent screens use light bordered cards
+- Fonts: Bricolage Grotesque (headings and big amounts), Figtree (body)
+- Amounts go through `euro` / `euroShort` (French format, `127,50 €`)
 - Mobile-first; `lg:` breakpoint switches to desktop sidebar layout
 
 ### Design References
