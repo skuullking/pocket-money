@@ -23,6 +23,10 @@ dotenv.config();
 
 const app = express();
 const prisma = new PrismaClient();
+
+// Ordre stable des membres d'une famille : sans orderBy, Postgres les renvoie
+// dans un ordre quelconque et les cartes des enfants changent de place.
+const CHILD_ORDER = [{ name: 'asc' as const }, { id: 'asc' as const }];
 const port = process.env.PORT || 3001;
 // Un JWT_SECRET absent ne doit JAMAIS retomber sur une valeur publique : des
 // tokens signés avec un secret connu sont forgeables. En production on refuse
@@ -500,7 +504,10 @@ app.get('/api/family', authenticateToken, async (req: any, res) => {
   const family = await prisma.family.findUnique({
     where: { id: req.user.familyId },
     include: {
-      users: { select: { id: true, name: true, role: true, avatar: true, color: true, balance: true, age: true, settings: true } },
+      users: {
+        select: { id: true, name: true, role: true, avatar: true, color: true, balance: true, age: true, settings: true },
+        orderBy: CHILD_ORDER,
+      },
       rules: true
     }
   });
@@ -1070,7 +1077,8 @@ app.get('/api/analytics/overview', authenticateToken, async (req: any, res) => {
   try {
     const children = await prisma.user.findMany({
       where: { familyId: req.user.familyId, role: 'CHILD' },
-      select: { id: true, name: true, avatar: true, color: true, balance: true }
+      select: { id: true, name: true, avatar: true, color: true, balance: true },
+      orderBy: CHILD_ORDER,
     });
     const childIds = children.map(c => c.id);
 
@@ -1155,7 +1163,8 @@ app.get('/api/family/children', authenticateToken, async (req: any, res) => {
   try {
     const children = await prisma.user.findMany({
       where: { familyId: req.user.familyId, role: 'CHILD' },
-      select: { id: true, name: true, avatar: true, color: true, balance: true, age: true, settings: true }
+      select: { id: true, name: true, avatar: true, color: true, balance: true, age: true, settings: true },
+      orderBy: CHILD_ORDER,
     });
     res.json({ children });
   } catch (error: any) { sendHandlerError(error, req, res); }

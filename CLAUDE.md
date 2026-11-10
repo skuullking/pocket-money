@@ -95,8 +95,10 @@ Tailwind CSS with a custom theme (`frontend/tailwind.config.js`, colors as CSS v
 
 ### Design References
 
-- `POCKETMONEY_DESIGN_SYSTEM.md` — full color system, typography, component specs, WCAG AA requirements
-- `POCKETMONEY_WIREFRAMES_SCREENS.md` — wireframes and user flows for all screens
+- `POCKETMONEY_DESIGN_SYSTEM.md` — the "Pièce d'or" tokens, typography, components and accessibility rules, as coded
+- `POCKETMONEY_WIREFRAMES_SCREENS.md` — every route and screen, its actions, and the main flows (chore, expense, goal)
+
+Keep both in sync with the code in the same PR. App icons are exported from `frontend/public/icons/icon.svg`.
 
 ## Deployment
 
