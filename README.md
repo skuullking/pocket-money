@@ -141,6 +141,8 @@ docker compose up -d --build
 
 Compose refuses to start while a required value is missing, and the API refuses placeholder secrets. Migrations run when the app container starts.
 
+The CI `stack` job runs the whole Compose stack on `DOMAIN=localhost` with `deploy/stack-test.sh`: HTTPS through Caddy, nginx, the API and Postgres, the session cookie, Socket.IO over WebSocket, the monitor, the daily backup and the restore procedure below. The script wipes the database, so never run it on the production server.
+
 | Variable | Required | Purpose |
 |---|---|---|
 | `DOMAIN` | yes | Public domain, used for the certificate and `CLIENT_URL` |

@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+# Démarre la pile de production complète (docker-compose.yml) sur DOMAIN=localhost
+# et la vérifie de bout en bout : Caddy (HTTPS), nginx, API, Postgres, Socket.IO,
+# sauvegarde, restauration, monitor. Destructif : à lancer en CI ou sur une machine
+# de test, jamais sur le serveur de production.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+if [ "${STACK_TEST:-}" != "yes" ]; then
+  echo "Refus : ce test écrase la base de la pile. Relancer avec STACK_TEST=yes." >&2
+  exit 1
+fi
+
+BASE=https://localhost
+CURL=(curl -sS -k --max-time 15)
+JAR=$(mktemp)
+fail() { echo "ÉCHEC : $*" >&2; exit 1; }
+ok() { echo "ok - $*"; }
+
+if [ ! -f .env ]; then
+  cat > .env <<EOF
+POSTGRES_PASSWORD=$(openssl rand -hex 32)
+JWT_SECRET=$(openssl rand -hex 32)
+DOMAIN=localhost
+RESEND_API_KEY=re_stack_test_not_a_real_key
+EMAIL_FROM=PocketMoney <no-reply@example.com>
+LEGAL_OPERATOR=Stack test
+LEGAL_CONTACT=contact@example.com
+LEGAL_HOST=Stack test
+EOF
+fi
+
+docker compose up -d --build --wait --wait-timeout 300 || {
+  docker compose ps; docker compose logs --tail 100; fail "la pile ne démarre pas"
+}
+ok "pile démarrée, app healthy"
+
+# ── HTTPS, nginx, API, base ────────────────────────────────────────────────
+health=$("${CURL[@]}" "$BASE/api/health")
+echo "$health" | grep -q '"status":"ok"' || fail "/api/health : $health"
+ok "/api/health via Caddy → nginx → API → Postgres"
+
+headers=$("${CURL[@]}" -D - -o /dev/null "$BASE/")
+echo "$headers" | grep -qi '^strict-transport-security' || fail "pas de HSTS"
+echo "$headers" | grep -qi '^x-frame-options: DENY' || fail "pas de X-Frame-Options"
+ok "en-têtes de sécurité Caddy"
+
+redirect=$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' --max-time 15 http://localhost/)
+case "$redirect" in 30[178]\ https://*) ok "HTTP redirigé vers HTTPS";; *) fail "redirection HTTP : $redirect";; esac
+
+"${CURL[@]}" "$BASE/privacy" | grep -q '<div id="root">' || fail "route SPA /privacy"
+asset=$("${CURL[@]}" "$BASE/" | grep -o '/assets/index-[^"]*\.js' | head -1)
+"${CURL[@]}" "$BASE$asset" | grep -q 'Stack test' || fail "LEGAL_OPERATOR absent du bundle"
+ok "SPA servie, fallback des routes, pages légales compilées"
+
+# ── Inscription, cookie, session ───────────────────────────────────────────
+signup() {
+  "${CURL[@]}" -c "$JAR" -b "$JAR" -o /dev/null -w '%{http_code}' \
+    -H 'Content-Type: application/json' -H "Origin: $BASE" \
+    -d "{\"name\":\"$1\",\"email\":\"$2\",\"password\":\"stack-test-pw\",\"familyName\":\"Famille $1\",\"acceptTerms\":true,\"parentalConsent\":true}" \
+    "$BASE/api/auth/register/parent/create"
+}
+login() {
+  "${CURL[@]}" -c "$JAR" -b "$JAR" -o /dev/null -w '%{http_code}' \
+    -H 'Content-Type: application/json' -H "Origin: $BASE" \
+    -d "{\"email\":\"$1\",\"password\":\"stack-test-pw\"}" "$BASE/api/auth/login"
+}
+
+[ "$(signup Avant avant@example.com)" = 201 ] || fail "inscription parent"
+grep -q 'localhost' "$JAR" || fail "cookie d'auth non posé"
+me=$("${CURL[@]}" -b "$JAR" "$BASE/api/auth/me")
+echo "$me" | grep -q '"name":"Avant"' || fail "/api/auth/me : $me"
+ok "inscription, cookie httpOnly et session à travers les deux proxys"
+
+csrf=$("${CURL[@]}" -o /dev/null -w '%{http_code}' -b "$JAR" -H 'Content-Type: application/json' \
+  -H 'Origin: https://evil.example' -d '{}' "$BASE/api/auth/logout")
+[ "$csrf" = 403 ] || fail "requête d'une autre origine acceptée ($csrf)"
+ok "requêtes d'une autre origine refusées"
+
+# ── Temps réel ─────────────────────────────────────────────────────────────
+cookie=$(awk '!/^#/ || /^#HttpOnly_/ {sub(/^#HttpOnly_/, ""); if (NF >= 7) printf "%s=%s; ", $6, $7}' "$JAR")
+NODE_TLS_REJECT_UNAUTHORIZED=0 SOCKET_COOKIE="$cookie" SOCKET_URL="$BASE" \
+  node deploy/socket-check.mjs || fail "Socket.IO"
+ok "Socket.IO en WebSocket, authentifié par le cookie"
+
+# ── Monitor ────────────────────────────────────────────────────────────────
+docker compose exec -T monitor wget -q -O - http://app/api/health | grep -q '"status":"ok"' \
+  || fail "monitor n'atteint pas l'app"
+ok "monitor atteint http://app/api/health"
+
+# ── Sauvegarde automatique ─────────────────────────────────────────────────
+for _ in $(seq 30); do
+  docker compose exec -T backup sh -c 'ls /backups/pocketmoney-*.dump' >/dev/null 2>&1 && break
+  sleep 2
+done
+docker compose exec -T backup sh -c 'ls /backups/pocketmoney-*.dump' >/dev/null || fail "aucune sauvegarde quotidienne"
+docker compose logs backup | grep -q 'backup ok' || fail "backup.sh n'a pas confirmé"
+ok "sauvegarde quotidienne écrite et vérifiée"
+
+# ── Restauration (procédure du README) ─────────────────────────────────────
+docker compose exec -T backup pg_dump --format=custom --file=/backups/stack-test.dump
+[ "$(signup Apres apres@example.com)" = 201 ] || fail "seconde inscription"
+docker compose stop app
+docker compose exec -T -e CONFIRM_RESTORE=yes backup sh /deploy/restore.sh /backups/stack-test.dump
+docker compose start app
+docker compose up -d --wait --wait-timeout 120 app
+rm -f "$JAR"; JAR=$(mktemp)
+[ "$(login avant@example.com)" = 200 ] || fail "compte d'avant la sauvegarde perdu"
+[ "$(login apres@example.com)" = 401 ] || fail "compte d'après la sauvegarde toujours là"
+ok "restauration : retour exact à l'état sauvegardé"
+
+echo "Pile de production validée."
