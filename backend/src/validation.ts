@@ -134,6 +134,10 @@ export const resetChildPasswordSchema = body({ newPassword });
 
 export const consentSchema = body(consentShape);
 
+export const demoSwitchSchema = body({
+  userId: z.string(typeErrors('compte')).uuid(invalid('compte')),
+});
+
 export const deleteFamilySchema = body({
   password: z.string(typeErrors('mot de passe')).min(1, missing('mot de passe')).max(1024, invalid('mot de passe')),
 });

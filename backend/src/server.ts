@@ -10,10 +10,11 @@ import rateLimit from 'express-rate-limit';
 import { AUTH_COOKIE, readAuthCookie } from './authCookie';
 import { assertEmailConfig, assertStrongSecret } from './config';
 import { installProcessHandlers, isIncident, logger, recordServerError, reportError } from './monitoring';
+import { countLiveDemos, createDemoFamily, DEMO_MAX_LIVE, demoEnabled, purgeExpiredDemos } from './demo';
 import { initSocket, emitToFamily, emitToUser, disconnectFamily, disconnectUser, SocketEvents } from './socket';
 import {
   allowanceSchema, applyRuleSchema, approveExpenseSchema, childSettingsSchema, consentSchema, createChoreSchema,
-  createChoreTemplateSchema, createGoalSchema, createRuleSchema, deductExpenseSchema, deleteFamilySchema, forgotPasswordSchema,
+  createChoreTemplateSchema, createGoalSchema, createRuleSchema, deductExpenseSchema, deleteFamilySchema, demoSwitchSchema, forgotPasswordSchema,
   goalAmountSchema, loginSchema, parseBody, registerChildSchema, registerParentCreateSchema,
   registerParentJoinSchema, rejectChoreSchema, rejectExpenseSchema, requestExpenseSchema, resetChildPasswordSchema, resetPasswordSchema,
   splitSettingsSchema, submitChoreSchema, updateChoreSchema, updateChoreTemplateSchema, updateRuleSchema,
@@ -182,7 +183,7 @@ const sendHandlerError = (error: any, req: any, res: any) => {
 // Sérialise les lecture-puis-écriture sur un compte jusqu'à la fin de la transaction.
 const lockUser = (tx: any, id: string) => tx.$queryRaw`SELECT id FROM "User" WHERE id = ${id} FOR UPDATE`;
 
-// Balance must never go below 0 (see backend/PLAN.md "Règle d'Or"). Deducts up to
+// Balance must never go below 0 (see the money invariant in CLAUDE.md). Deducts up to
 // `amount` from a child's balance, clamping at 0, and returns how much was actually
 // taken so the caller can record an accurate transaction and warn if it was capped.
 const clampedDeduct = async (tx: any, childId: string, amount: number) => {
@@ -285,7 +286,7 @@ const generateDueChores = async (familyId: string) => {
 };
 
 // Répartition Épargne/Dépense/Don : additive et informative uniquement (voir
-// QA_TEST_PLAN.md Fonctionnalité 4) — n'affecte jamais `balance`, qui reste
+// docs/QA_TEST_PLAN.md Fonctionnalité 4) — n'affecte jamais `balance`, qui reste
 // l'unique cagnotte dépensable déjà durcie contre le solde négatif.
 const applySplit = async (tx: any, childId: string, amount: number) => {
   const settings = await tx.childSettings.findUnique({ where: { childId } });
@@ -312,6 +313,10 @@ const authenticateToken = async (req: any, res: any, next: any) => {
       include: { family: true, settings: true }
     });
     if (!user) return res.status(404).json({ error: 'User not found' });
+    // Une démo expirée mais pas encore purgée n'est plus accessible.
+    if (user.family.demoExpiresAt && user.family.demoExpiresAt < new Date()) {
+      return res.status(401).json({ error: 'Démo expirée' });
+    }
     req.user = user;
     next();
   } catch (err) {
@@ -337,6 +342,7 @@ const loginLimiter = authLimiter(10, 15, 'Trop de tentatives de connexion. Rées
 const registerLimiter = authLimiter(10, 60, "Trop d'inscriptions depuis cette connexion. Réessaie plus tard.");
 const forgotPasswordLimiter = authLimiter(5, 60, 'Trop de demandes de réinitialisation. Réessaie plus tard.');
 const deleteFamilyLimiter = authLimiter(5, 15, 'Trop de tentatives. Réessaie dans 15 minutes.', true);
+const demoLimiter = authLimiter(Number(process.env.DEMO_RATE_LIMIT ?? 5), 60, 'Trop de démos lancées depuis cette connexion. Réessaie plus tard.');
 const exportLimiter = authLimiter(10, 60, "Trop d'exports. Réessaie plus tard.");
 
 // Les conflits d'unicité remontent dans un toast : pas d'erreur Prisma brute.
@@ -441,6 +447,44 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
 app.post('/api/auth/logout', (req, res) => {
   res.clearCookie(AUTH_COOKIE, AUTH_COOKIE_OPTIONS);
   res.json({ success: true });
+});
+
+// ── Démo ──────────────────────────────────────────────────────────────────
+// Désactivée par défaut : DEMO_ENABLED=true l'ouvre (voir src/demo.ts).
+
+app.get('/api/demo', (req, res) => {
+  res.json({ enabled: demoEnabled() });
+});
+
+app.post('/api/demo', demoLimiter, async (req, res) => {
+  if (!demoEnabled()) return res.status(404).json({ error: 'Démo désactivée' });
+  try {
+    await purgeExpiredDemos(prisma);
+    if (await countLiveDemos(prisma) >= DEMO_MAX_LIVE) {
+      return res.status(503).json({ error: 'La démo est très demandée en ce moment. Réessaie dans quelques minutes.' });
+    }
+    const { family, parent, children } = await createDemoFamily(prisma, appDate(new Date()));
+    setAuthCookie(res, parent.id);
+    res.status(201).json({
+      user: { id: parent.id, name: parent.name, role: parent.role, familyId: family.id, balance: parent.balance, monthDelta: 0, avatar: parent.avatar, color: parent.color },
+      children: children.map(c => ({ id: c.id, name: c.name })),
+      expiresAt: family.demoExpiresAt,
+    });
+  } catch (error: any) { sendHandlerError(error, req, res); }
+});
+
+// Passer d'un membre à l'autre de sa famille de démo, sans mot de passe.
+// Réservé aux familles de démo : une vraie famille n'a jamais demoExpiresAt.
+app.post('/api/demo/switch', authenticateToken, async (req: any, res) => {
+  const body = parseBody(demoSwitchSchema, req, res);
+  if (!body) return;
+  if (!req.user.family.demoExpiresAt) return res.status(403).json({ error: 'Interdit' });
+  try {
+    const target = await prisma.user.findUnique({ where: { id: body.userId } });
+    if (!target || target.familyId !== req.user.familyId) return res.status(404).json({ error: 'Membre introuvable' });
+    setAuthCookie(res, target.id);
+    res.json({ user: { id: target.id, name: target.name, role: target.role, familyId: target.familyId, balance: target.balance, monthDelta: await monthDeltaOf(target.id), avatar: target.avatar, color: target.color, age: target.age } });
+  } catch (error: any) { sendHandlerError(error, req, res); }
 });
 
 app.get('/api/auth/me', authenticateToken, async (req: any, res) => {

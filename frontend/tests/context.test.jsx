@@ -12,6 +12,7 @@ vi.mock('../src/api', () => {
   return {
     SOCKET_URL: 'http://socket.test',
     authAPI: group('getMe', 'login', 'logout', 'registerParentCreate', 'registerParentJoin', 'registerChild'),
+    demoAPI: group('status', 'start', 'switchTo'),
     familyAPI: group('getFamily', 'removeChild', 'deleteFamily'),
     choresAPI: group(
       'getChores',
@@ -143,6 +144,34 @@ describe('session', () => {
       inviteCode: 'DUPONT',
     });
     expect(JSON.parse(localStorage.getItem('pocketmoney_cached_family_members'))).toHaveLength(2);
+  });
+});
+
+describe('démo', () => {
+  it('connecte le parent de la démo', async () => {
+    await mount(null);
+    const camille = { ...parent, id: 'demo-parent', name: 'Camille' };
+    api.demoAPI.start.mockResolvedValue({ user: camille });
+    api.authAPI.getMe.mockResolvedValue({ user: camille });
+    await run(() => app.startDemo());
+    await waitFor(() => expect(app.user.name).toBe('Camille'));
+  });
+
+  it('passe sur un enfant sans mot de passe', async () => {
+    await mount();
+    api.demoAPI.switchTo.mockResolvedValue({ user: alice });
+    api.authAPI.getMe.mockResolvedValue({ user: alice });
+    await run(() => app.switchDemoUser(alice.id));
+    expect(api.demoAPI.switchTo).toHaveBeenCalledWith(alice.id);
+    await waitFor(() => expect(app.user.id).toBe(alice.id));
+  });
+
+  it("ne garde pas les enfants d'une démo pour l'accès rapide", async () => {
+    localStorage.removeItem('pocketmoney_cached_family_members');
+    api.familyAPI.getFamily.mockResolvedValue({ family: { ...family, demoExpiresAt: '2030-01-01T00:00:00.000Z' } });
+    await mount();
+    await waitFor(() => expect(app.chores).toEqual(chores));
+    expect(localStorage.getItem('pocketmoney_cached_family_members')).toBeNull();
   });
 });
 

@@ -39,6 +39,9 @@ export default defineConfig({
         CLIENT_URL: WEB_URL,
         PORT: String(API_PORT),
         RESEND_API_KEY: '',
+        DEMO_ENABLED: 'true',
+        // Chaque test de démo en crée une ou plusieurs depuis la même IP.
+        DEMO_RATE_LIMIT: '1000',
       },
     },
     {

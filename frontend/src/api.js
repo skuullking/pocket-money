@@ -52,6 +52,16 @@ export const authAPI = {
   logout: () => fetchAPI('/auth/logout', { method: 'POST' }),
 };
 
+// Démo jetable : une famille remplie par visiteur, supprimée après 24 h.
+export const demoAPI = {
+  status: () => fetchAPI('/demo'),
+  start: () => fetchAPI('/demo', { method: 'POST' }),
+  switchTo: (userId) => fetchAPI('/demo/switch', {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  }),
+};
+
 export const familyAPI = {
   getFamily: () => fetchAPI('/family'),
   getChildren: () => fetchAPI('/family/children'),

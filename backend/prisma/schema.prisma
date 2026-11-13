@@ -12,10 +12,14 @@ model Family {
   name       String
   inviteCode String   @unique
   createdAt  DateTime @default(now())
+  // Famille de démonstration jetable : supprimée (en cascade) après cette date.
+  demoExpiresAt DateTime?
   users      User[]
   rules      Rule[]
   goals      Goal[]
   choreTemplates ChoreTemplate[]
+
+  @@index([demoExpiresAt])
 }
 
 model User {

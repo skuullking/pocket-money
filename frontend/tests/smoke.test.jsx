@@ -14,6 +14,7 @@ vi.mock('../src/api', async () => {
   return {
     SOCKET_URL: undefined,
     authAPI: {},
+    demoAPI: { status: vi.fn().mockResolvedValue({ enabled: false }) },
     analyticsAPI: { getOverview: vi.fn().mockResolvedValue(analytics) },
     allowanceAPI: { get: vi.fn().mockResolvedValue({ allowance: null }) },
     rulesAPI: { getPenaltyHistory: vi.fn().mockResolvedValue({ history: [] }) },
