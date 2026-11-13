@@ -141,6 +141,7 @@ Tailles `sm` (44 px), `md` (52 px), `lg` (60 px). Props utiles : `full`, `loadin
 - **Mobile** (< `lg`) : barre d'onglets en bas (`BottomNav`), contenu avec `pb-32` pour ne pas passer dessous.
 - **Ordinateur** (`lg:` et plus) : barre latérale (`Sidebar`) à gauche.
 - `Layout` prend `title`, `showBack`, `headerRight`, `width` (par défaut une colonne lisible) et `bare` pour les écrans sans en-tête.
+- `DemoBar` : bandeau doré (`bg-gold`, bord `gold-edge`) en tête du contenu, seulement dans une famille de démo. Les membres sont des pastilles ; celle du compte actif est pleine (`aria-pressed`).
 
 ### Navigation
 
@@ -161,7 +162,7 @@ L'onglet reste actif sur les sous-pages (`/parent/chores/42` garde « Corvées �
 
 | Classe | Effet | Usage |
 |---|---|---|
-| `animate-pop-in` | Rebond d'apparition (0,35 s) | `BigCoin`, célébrations. |
+| `animate-pop-in` | Rebond d'apparition (0,35 s) | `BigCoin`, `Toast`, célébrations. Anime `transform` : ne pas la poser sur un élément centré par `-translate-x-1/2`, elle écraserait le centrage. |
 | `animate-sheet` | Montée du bas (0,25 s) | Ouverture des `Modal`. |
 | `animate-fade-in` | Fondu (0,3 s) | Fond des modales, écrans. |
 

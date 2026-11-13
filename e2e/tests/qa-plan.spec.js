@@ -1,4 +1,4 @@
-// Parcours de QA_TEST_PLAN.md qu'aucune autre suite ne couvre.
+// Parcours de docs/QA_TEST_PLAN.md qu'aucune autre suite ne couvre.
 import { readFileSync } from 'fs';
 import { expect, INVITE_CODE, loginAsChild, loginAsParent, PASSWORD, test, toast } from '../support/fixtures.js';
 

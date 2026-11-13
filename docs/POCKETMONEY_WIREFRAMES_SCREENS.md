@@ -10,13 +10,15 @@ Si vous ajoutez, renommez ou supprimez un écran, mettez à jour ce fichier dans
 
 | Route | Écran | Contenu | Action principale |
 |---|---|---|---|
-| `/welcome` | Accueil | Bandeau violet avec la pièce, accroche, avatars des enfants déjà vus sur cet appareil (accès rapide), liens légaux. | « Se connecter », « Créer une famille » |
+| `/welcome` | Accueil | Bandeau violet avec la pièce, badge « Bêta », accroche, avatars des enfants déjà vus sur cet appareil (accès rapide), liens légaux. | « Essayer la démo » (si `DEMO_ENABLED`), « Se connecter », « Créer une famille » |
 | `/login` | Connexion | Sélecteur **Enfant / Parent** (Enfant par défaut). Enfant : prénom + code famille + mot de passe. Parent : e-mail + mot de passe. | « Se connecter » |
 | `/signup` | Inscription | Trois modes : « Parent, nouvelle famille », « Parent, famille existante », « Enfant ». La nouvelle famille passe par des étapes (compte, puis règles). | « Créer ma famille » |
 | `/forgot-password` | Mot de passe oublié | E-mail du parent. | « Envoyer le lien » |
 | `/reset-password` | Nouveau mot de passe | Ouvert depuis le lien reçu par e-mail : nouveau mot de passe et confirmation. | « Définir le mot de passe » |
 
 Un enfant n'a pas d'e-mail : il se connecte avec son prénom et le code de sa famille, que le parent voit dans Enfants et Paramètres.
+
+**Démo.** « Essayer la démo » crée une famille fictive propre au visiteur (Camille, Léa, Hugo), le connecte en parent et l'envoie sur `/parent`. Un bandeau doré en haut de chaque écran rappelle que les données sont effacées sous 24 h et permet de passer d'un membre à l'autre (« Voir en tant que ») sans mot de passe. Les enfants d'une démo n'apparaissent pas dans l'accès rapide.
 
 ---
 
