@@ -23,6 +23,10 @@ dotenv.config();
 
 const app = express();
 const prisma = new PrismaClient();
+
+// Ordre stable des membres d'une famille : sans orderBy, Postgres les renvoie
+// dans un ordre quelconque et les cartes des enfants changent de place.
+const CHILD_ORDER = [{ name: 'asc' as const }, { id: 'asc' as const }];
 const port = process.env.PORT || 3001;
 // Un JWT_SECRET absent ne doit JAMAIS retomber sur une valeur publique : des
 // tokens signés avec un secret connu sont forgeables. En production on refuse
@@ -500,7 +504,10 @@ app.get('/api/family', authenticateToken, async (req: any, res) => {
   const family = await prisma.family.findUnique({
     where: { id: req.user.familyId },
     include: {
-      users: { select: { id: true, name: true, role: true, avatar: true, color: true, balance: true, age: true, settings: true } },
+      users: {
+        select: { id: true, name: true, role: true, avatar: true, color: true, balance: true, age: true, settings: true },
+        orderBy: CHILD_ORDER,
+      },
       rules: true
     }
   });
@@ -718,8 +725,9 @@ const isFamilyChild = async (userId: unknown, familyId: string) => {
 // Le statut attendu est dans le `where` : de deux requêtes simultanées, une seule
 // modifie la ligne, ce qu'une lecture suivie d'un update ne garantirait pas.
 // `null` si la corvée n'est plus dans le statut attendu.
-const transitionChore = async (db: any, id: string, from: string, data: object) => {
-  const { count } = await db.chore.updateMany({ where: { id, status: from }, data });
+const transitionChore = async (db: any, id: string, from: string | string[], data: object) => {
+  const status = Array.isArray(from) ? { in: from } : from;
+  const { count } = await db.chore.updateMany({ where: { id, status }, data });
   return count === 1 ? db.chore.findUniqueOrThrow({ where: { id } }) : null;
 };
 
@@ -831,7 +839,8 @@ app.patch('/api/chores/:id/submit', authenticateToken, async (req: any, res) => 
     const existing = await findFamilyChore(req.params.id, req.user.familyId);
     if (!existing) return res.status(404).json({ error: 'Corvée non trouvée' });
     if (existing.assigneeId !== req.user.id) return res.status(403).json({ error: 'Interdit' });
-    const chore = await transitionChore(prisma, existing.id, 'PENDING', { status: 'SUBMITTED', note, proofImageUrl });
+    // Une corvée refusée peut être refaite : elle repart en validation, le paiement reste unique.
+    const chore = await transitionChore(prisma, existing.id, ['PENDING', 'REJECTED'], { status: 'SUBMITTED', note, proofImageUrl, rejectionReason: null });
     if (!chore) return res.status(409).json({ error: 'Cette corvée a déjà été soumise ou traitée' });
     emitToFamily(req.user.familyId, SocketEvents.CHORE_SUBMITTED, chore);
     res.json({ chore });
@@ -1068,7 +1077,8 @@ app.get('/api/analytics/overview', authenticateToken, async (req: any, res) => {
   try {
     const children = await prisma.user.findMany({
       where: { familyId: req.user.familyId, role: 'CHILD' },
-      select: { id: true, name: true, avatar: true, color: true, balance: true }
+      select: { id: true, name: true, avatar: true, color: true, balance: true },
+      orderBy: CHILD_ORDER,
     });
     const childIds = children.map(c => c.id);
 
@@ -1153,7 +1163,8 @@ app.get('/api/family/children', authenticateToken, async (req: any, res) => {
   try {
     const children = await prisma.user.findMany({
       where: { familyId: req.user.familyId, role: 'CHILD' },
-      select: { id: true, name: true, avatar: true, color: true, balance: true, age: true, settings: true }
+      select: { id: true, name: true, avatar: true, color: true, balance: true, age: true, settings: true },
+      orderBy: CHILD_ORDER,
     });
     res.json({ children });
   } catch (error: any) { sendHandlerError(error, req, res); }

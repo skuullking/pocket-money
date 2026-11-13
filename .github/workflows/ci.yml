@@ -66,6 +66,25 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  # La pile de production complète (docker-compose.yml), de Caddy à Postgres.
+  stack:
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+        working-directory: frontend
+      - run: bash deploy/stack-test.sh
+        env:
+          STACK_TEST: 'yes'
+      - if: failure()
+        run: docker compose ps && docker compose logs --tail 200
+      - if: always()
+        run: docker compose down -v
+
   e2e:
     needs: [backend, frontend]
     runs-on: ubuntu-latest

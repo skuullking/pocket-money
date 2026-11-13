@@ -20,6 +20,7 @@ vi.mock('../src/screens/auth.jsx', () =>
 vi.mock('../src/screens/parent.jsx', () =>
   stubScreens([
     'ParentDashboard',
+    'InboxScreen',
     'ChoresList',
     'ChoreDetail',
     'CreateChore',
@@ -53,6 +54,7 @@ const visit = (path, user, overrides = {}) => {
 
 const parentRoutes = [
   ['/parent', 'ParentDashboard'],
+  ['/parent/inbox', 'InboxScreen'],
   ['/parent/chores', 'ChoresList'],
   ['/parent/chores/new', 'CreateChore'],
   ['/parent/chores/abc', 'ChoreDetail'],

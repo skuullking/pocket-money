@@ -3,9 +3,9 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom
 import { AppProvider, useApp } from './context';
 
 // Import basic components
-import { Welcome, SignIn, SignUp, Splash, ForgotPassword, ResetPassword } from './screens/auth.jsx';
+import { Welcome, SignIn, SignUp, ForgotPassword, ResetPassword } from './screens/auth.jsx';
 import { PrivacyPolicy, TermsOfUse } from './screens/legal.jsx';
-import { ParentDashboard, ChoresList, ChoreDetail, CreateChore, ChildrenView, RulesScreen, PenaltyHistoryScreen, AnalyticsScreen, SettingsScreen, ExpensesReview, ChildSettingsScreen } from './screens/parent.jsx';
+import { ParentDashboard, InboxScreen, ChoresList, ChoreDetail, CreateChore, ChildrenView, RulesScreen, PenaltyHistoryScreen, AnalyticsScreen, SettingsScreen, ExpensesReview, ChildSettingsScreen } from './screens/parent.jsx';
 import { ChildDashboard, AvailableChores, SubmitChore, MyChores, BalanceScreen, GoalsScreen, ProfileScreen, ExpensesScreen } from './screens/child.jsx';
 
 const homePath = (user) => (user.role === 'PARENT' ? '/parent' : '/child');
@@ -27,9 +27,9 @@ function AppRoutes() {
 
   if (loading) {
     return (
-      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f2eee1', color: '#6e4600', fontFamily: 'sans-serif' }}>
+      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5F3FE', color: '#3A28D9', fontFamily: 'sans-serif' }}>
         <div style={{ textAlign: 'center' }}>
-          <div className="animate-spin" style={{ width: '40px', height: '40px', border: '4px solid #6e4600', borderTopColor: 'transparent', borderRadius: '50%', margin: '0 auto 20px' }}></div>
+          <div className="animate-spin" style={{ width: '40px', height: '40px', border: '4px solid #3A28D9', borderTopColor: 'transparent', borderRadius: '50%', margin: '0 auto 20px' }}></div>
           <p>Chargement de PocketMoney...</p>
         </div>
       </div>
@@ -49,6 +49,7 @@ function AppRoutes() {
       {/* Parent */}
       <Route element={<ProtectedRoute role="PARENT" />}>
         <Route path="/parent" element={<ParentDashboard />} />
+        <Route path="/parent/inbox" element={<InboxScreen />} />
         <Route path="/parent/chores" element={<ChoresList />} />
         <Route path="/parent/chores/:choreId" element={<ChoreDetail />} />
         <Route path="/parent/chores/new" element={<CreateChore />} />

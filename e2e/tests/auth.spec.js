@@ -33,6 +33,7 @@ test.describe('authentification', () => {
 
   test('un mauvais mot de passe affiche une erreur', async ({ page }) => {
     await page.goto('/login');
+    await page.getByRole('button', { name: 'Parent', exact: true }).click();
     await page.getByPlaceholder('ex: sarah@gmail.com').fill('sarah@dupont.fr');
     await page.getByPlaceholder('••••••••').fill('mauvais-mdp');
     await page.getByRole('button', { name: 'Me connecter' }).click();
@@ -73,7 +74,7 @@ test.describe('authentification', () => {
     await page.goto('/welcome');
     await page.getByText('Alice', { exact: true }).click();
     await expect(page).toHaveURL(/\/login$/);
-    await expect(page.getByPlaceholder('ex: sarah@gmail.com')).toHaveValue('Alice');
+    await expect(page.getByPlaceholder('Alice')).toHaveValue('Alice');
     await expect(page.getByPlaceholder('ABCD12')).toHaveValue(INVITE_CODE);
     await expect(page.getByPlaceholder('••••••••')).toHaveValue('');
   });
@@ -82,7 +83,7 @@ test.describe('authentification', () => {
 test.describe('inscription', () => {
   test('un parent crée une famille avec ses règles', async ({ page }) => {
     await page.goto('/signup');
-    await page.getByText('Parent : Créer une famille').click();
+    await page.getByText('Parent, nouvelle famille').click();
     await page.getByPlaceholder('Sarah Dupont').fill('Marc Martin');
     await page.getByPlaceholder('votre@email.com').fill(`marc-${Date.now()}@example.test`);
     await page.getByPlaceholder('••••••••').fill(PASSWORD);
@@ -97,7 +98,7 @@ test.describe('inscription', () => {
 
   test('un enfant rejoint une famille avec le code', async ({ page }) => {
     await page.goto('/signup');
-    await page.getByText('Enfant : Créer mon compte').click();
+    await page.getByText('Enfant', { exact: true }).click();
     await page.getByPlaceholder('Alice').fill('Zoé');
     await page.getByPlaceholder('8').fill('9');
     await page.getByPlaceholder('••••••••').fill(PASSWORD);
@@ -108,7 +109,7 @@ test.describe('inscription', () => {
 
   test('un prénom déjà pris dans la famille est refusé', async ({ page }) => {
     await page.goto('/signup');
-    await page.getByText('Enfant : Créer mon compte').click();
+    await page.getByText('Enfant', { exact: true }).click();
     await page.getByPlaceholder('Alice').fill('Alice');
     await page.getByPlaceholder('8').fill('9');
     await page.getByPlaceholder('••••••••').fill(PASSWORD);

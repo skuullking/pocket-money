@@ -2,6 +2,7 @@ import { expect, loginAsChild, loginAsParent, test, visibleButton } from '../sup
 
 const PARENT_PAGES = [
   '/parent',
+  '/parent/inbox',
   '/parent/chores',
   '/parent/chores/new',
   '/parent/chores/chore-2',
@@ -64,8 +65,8 @@ test.describe('mise en page', () => {
     test.skip(testInfo.project.name !== 'mobile', 'concerne le mobile');
     await loginAsParent(page);
     for (const [path, title] of [
-      ['/parent', 'Tableau de Bord'],
-      ['/parent/chores', 'Mes Corvées'],
+      ['/parent', 'Bonjour'],
+      ['/parent/chores', 'Corvées'],
     ]) {
       await page.goto(path);
       const heading = page.getByRole('heading', { name: title }).locator('visible=true').first();
@@ -82,11 +83,10 @@ test.describe('mise en page', () => {
     await expect(page.getByRole('button', { name: 'Envoyer la demande' })).toBeInViewport();
   });
 
-  test("« Ajouter un enfant » mène au code d'invitation (UI-1)", async ({ page }) => {
+  test("« Ajouter un enfant » montre le code d'invitation (UI-1)", async ({ page }) => {
     await loginAsParent(page);
     await page.goto('/parent/children');
-    await page.getByRole('button', { name: /Ajouter un enfant/ }).click();
-    await expect(page).toHaveURL(/\/parent\/settings$/);
+    await expect(page.getByRole('heading', { name: 'Ajouter un enfant' })).toBeVisible();
     await expect(page.getByText('DUPONT2024')).toBeVisible();
   });
 });

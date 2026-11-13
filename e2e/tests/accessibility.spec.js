@@ -7,6 +7,7 @@ const PUBLIC_PAGES = ['/welcome', '/login', '/signup', '/forgot-password', '/pri
 
 const PARENT_PAGES = [
   '/parent',
+  '/parent/inbox',
   '/parent/chores',
   '/parent/chores/new',
   '/parent/chores/chore-2',

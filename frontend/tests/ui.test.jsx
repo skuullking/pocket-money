@@ -9,6 +9,7 @@ import {
   Btn,
   Checkbox,
   EmptyState,
+  formatDeadline,
   Input,
   Modal,
   ProgressBar,
@@ -49,10 +50,10 @@ describe('Btn', () => {
 
 describe('Amount', () => {
   it.each([
-    [5, '+5.00€'],
-    [0, '+0.00€'],
-    [-2.5, '-2.50€'],
-    [1234.5, '+1234.50€'],
+    [5, '+5,00 €'],
+    [0, '+0,00 €'],
+    [-2.5, '−2,50 €'],
+    [1234.5, '+1234,50 €'],
   ])("%f s'affiche %s", (value, expected) => {
     render(<Amount value={value} />);
     expect(screen.getByText(expected)).toBeInTheDocument();
@@ -60,7 +61,17 @@ describe('Amount', () => {
 
   it('colore les montants négatifs en erreur', () => {
     render(<Amount value={-1} />);
-    expect(screen.getByText('-1.00€').className).toContain('error');
+    expect(screen.getByText('−1,00 €').className).toContain('error');
+  });
+});
+
+describe('formatDeadline', () => {
+  it.each([
+    ['2026-11-11', '11 novembre'],
+    ['Demain', 'Demain'],
+    [undefined, undefined],
+  ])('%s donne %s', (value, expected) => {
+    expect(formatDeadline(value)).toBe(expected);
   });
 });
 

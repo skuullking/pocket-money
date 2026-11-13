@@ -1,90 +1,71 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation, useSearchParams, Link } from 'react-router-dom';
-import {
-  Users, User, ChevronRight, Eye, EyeOff, ArrowLeft,
-  Shield, Plus, Wallet, Sparkles, Zap, Trash2, Mail
-} from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Eye, EyeOff, Mail, Plus, Trash2, Wallet } from 'lucide-react';
 import { useApp } from '../context';
 import { authAPI } from '../api';
-import { Btn, Input, Card, Avatar, Checkbox } from '../components/ui';
+import { Avatar, Btn, Checkbox, Input, Segmented } from '../components/ui';
 import { Layout } from '../components/layout';
 
-// ── Splash Screen ─────────────────────────────────────────────────────────
+const heading = 'font-headline font-extrabold tracking-tight';
+
 export function Splash({ onFinish }) {
-  const { theme } = useApp();
-  const isDark = theme === 'dark';
-  
   useEffect(() => {
     const timer = setTimeout(onFinish, 2500);
     return () => clearTimeout(timer);
   }, [onFinish]);
 
   return (
-    <div className={`min-h-screen flex flex-col items-center justify-center ${isDark ? 'bg-[#1E1C00]' : 'bg-primary'} text-white p-6 overflow-hidden relative`}>
-      <div className="relative animate-float z-10">
-        <div className="w-28 h-28 bg-white/20 backdrop-blur-md rounded-[2.5rem] flex items-center justify-center shadow-2xl border border-white/30 text-on-primary">
-          <Wallet size={52} />
-        </div>
-        <div className="absolute -top-6 -right-6 animate-pulse">
-          <Sparkles className="text-gold" size={36} />
-        </div>
+    <div className="min-h-screen flex flex-col items-center justify-center gap-6 bg-hero text-white p-6">
+      <div className="w-28 h-28 rounded-full bg-gold border-4 border-gold-edge text-on-gold flex items-center justify-center shadow-press-lg animate-pop-in">
+        <Wallet size={52} aria-hidden="true" />
       </div>
-      <div className="mt-10 text-center animate-fade-in z-10">
-        <h1 className="font-headline font-extrabold text-4xl tracking-tighter mb-2">PocketMoney</h1>
-        <p className="text-on-primary font-body text-base font-medium">L'argent de poche simplifié</p>
-      </div>
+      <h1 className={`${heading} text-4xl`}>PocketMoney</h1>
+      <p className="text-base font-medium">L'argent de poche simplifié</p>
     </div>
   );
 }
 
-// ── Welcome Screen ─────────────────────────────────────────────────────────
 export function Welcome() {
   const { family, cachedFamilyMembers } = useApp();
   const navigate = useNavigate();
-  // `family` is only populated after login (fetchAppData needs a user), so on this
-  // logged-out screen we fall back to the last family seen on this device.
-  const quickAccessChildren = (family?.users?.filter(u => u.role === 'CHILD')) || cachedFamilyMembers || [];
+  // `family` n'est rempli qu'après la connexion : sur cet écran, on retombe
+  // sur la dernière famille vue depuis cet appareil.
+  const quickAccess = family?.users?.filter(u => u.role === 'CHILD') || cachedFamilyMembers || [];
 
   return (
-    <Layout noPadding>
-      <div className="flex flex-col items-center justify-center min-h-[85vh] px-6 py-12 text-center max-w-lg mx-auto">
-        <div className="w-24 h-24 rounded-[2rem] bg-primary flex items-center justify-center mb-8 shadow-clay-primary animate-pop-in text-on-primary">
-          <Wallet size={48} strokeWidth={2.5} />
+    <Layout bare>
+      <div className="relative min-h-screen flex flex-col px-5 pt-7 pb-6 lg:px-20 lg:py-14 bg-hero text-white overflow-hidden on-dark-field">
+        <div aria-hidden="true" className="coin-ridge absolute -right-28 top-20 lg:right-16 lg:top-1/2 lg:-translate-y-1/2 w-[360px] h-[360px] lg:w-[520px] lg:h-[520px] rounded-full flex items-center justify-center" style={{ boxShadow: '-10px 12px 0 #1A1640' }}>
+          <div className="w-[90%] h-[90%] rounded-full bg-gold border-4 border-gold-edge flex items-center justify-center font-headline font-extrabold text-[170px] lg:text-[250px] text-gold-edge">€</div>
         </div>
-        <h1 className="text-5xl font-headline font-black text-on-surface mb-4 tracking-tighter">
-          Pocket<span className="text-primary">Money</span>
-        </h1>
-        <p className="text-on-surface-variant text-lg font-medium mb-12 max-w-sm leading-relaxed">
-          Gérez l'argent de poche en famille simplement.
-        </p>
 
-        <div className="w-full space-y-4 animate-fade-up">
-          <Link to="/login" className="block w-full">
-            <Btn full size="lg" className="h-16 text-lg shadow-clay-primary">Se connecter</Btn>
-          </Link>
-          
-          {quickAccessChildren.length > 0 && (
-            <div className="pt-8 space-y-3">
-               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant">— Accès Rapide —</p>
-               <div className="grid grid-cols-2 gap-3">
-                  {quickAccessChildren.map(child => (
-                    <button key={child.id} onClick={() => navigate('/login', { state: { prefillName: child.name, prefillInviteCode: child.inviteCode || family?.inviteCode } })} className="group">
-                      <Card hover className="p-4 flex flex-col items-center gap-2 border-2 border-transparent hover:border-primary/20">
-                        <Avatar letter={child.avatar || child.name.charAt(0)} color={child.color} size="sm" />
-                        <span className="font-bold text-xs text-on-surface truncate w-full">{child.name}</span>
-                      </Card>
-                    </button>
-                  ))}
-               </div>
+        <span className={`${heading} relative text-2xl`}>PocketMoney</span>
+
+        <div className="relative mt-auto lg:my-auto max-w-[32rem] flex flex-col gap-3.5">
+          <h1 className={`${heading} text-[56px] lg:text-[80px] leading-[0.98] tracking-[-0.04em]`}>L'argent de poche, ça se gagne.</h1>
+          <p className="text-lg leading-snug">Les parents confient des corvées. Les enfants gagnent, épargnent et apprennent.</p>
+
+          {quickAccess.length > 0 && (
+            <div className="flex flex-wrap gap-2.5 mt-1.5">
+              {quickAccess.map(child => (
+                <button
+                  key={child.id}
+                  type="button"
+                  onClick={() => navigate('/login', { state: { prefillName: child.name, prefillInviteCode: child.inviteCode || family?.inviteCode } })}
+                  className="flex flex-col items-center gap-1 min-w-[60px] font-semibold text-sm"
+                >
+                  <Avatar letter={child.avatar || child.name.charAt(0)} color={child.color} size="sm" />
+                  <span>{child.name}</span>
+                </button>
+              ))}
             </div>
           )}
 
-          <div className="pt-8 border-t border-on-surface/5 w-full text-center">
-            <Link to="/signup" className="text-sm font-bold text-primary hover:underline">Créer une nouvelle famille</Link>
-            <p className="mt-6 text-xs text-on-surface-variant space-x-4">
-              <Link to="/privacy" className="underline">Confidentialité</Link>
-              <Link to="/terms" className="underline">Conditions d'utilisation</Link>
-            </p>
+          <Btn full size="lg" variant="gold" className="mt-1.5 !shadow-[0_5px_0_#1A1640]" onClick={() => navigate('/login')}>Se connecter</Btn>
+          <Link to="/signup" className="flex items-center justify-center min-h-[54px] rounded-2xl border-2 border-white font-bold text-[17px]">Créer une famille</Link>
+          <div className="flex justify-center gap-[18px] text-sm">
+            <Link to="/privacy" className="underline py-2">Confidentialité</Link>
+            <Link to="/terms" className="underline py-2">Conditions d'utilisation</Link>
           </div>
         </div>
       </div>
@@ -92,89 +73,77 @@ export function Welcome() {
   );
 }
 
-// ── Sign In Screen ─────────────────────────────────────────────────────────
+const LOGIN_ROLES = [
+  { value: 'child', label: 'Enfant' },
+  { value: 'parent', label: 'Parent' },
+];
+
 export function SignIn() {
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useApp();
+  const [role, setRole] = useState('child');
   const [form, setForm] = useState({
-    email: location.state?.prefillName || '',
+    name: location.state?.prefillName || '',
+    email: '',
     inviteCode: location.state?.prefillInviteCode || '',
     password: '',
   });
   const [loading, setLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
-  // Les parents ont un email ; un prénom n'identifie un enfant qu'avec son code famille.
-  const isChildLogin = form.email.trim() !== '' && !form.email.includes('@');
+  const set = key => e => setForm(p => ({ ...p, [key]: e.target.value }));
+  const isChild = role === 'child';
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async e => {
     e.preventDefault();
     if (loading) return;
     setLoading(true);
     try {
-      const { email, password, inviteCode } = form;
-      const data = await login(isChildLogin ? { email, password, inviteCode } : { email, password });
-      if (data && data.user) {
-        navigate(data.user.role === 'PARENT' ? '/parent' : '/child');
-      }
+      const { name, email, password, inviteCode } = form;
+      const data = await login(isChild ? { email: name, password, inviteCode } : { email, password });
+      if (data && data.user) navigate(data.user.role === 'PARENT' ? '/parent' : '/child');
     } catch (err) {
-      console.error("Login failed", err);
+      console.error('Login failed', err);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Layout title="Connexion" showBack onBack={() => navigate('/welcome')}>
-      <div className="max-w-md mx-auto py-8 px-4">
-        <div className="mb-12 text-center">
-          <div className="inline-flex p-4 rounded-3xl bg-secondary-container/30 text-secondary mb-6 shadow-inner">
-            <Zap size={32} fill="currentColor" />
-          </div>
-          <h2 className="text-4xl font-headline font-black text-on-surface tracking-tighter">De retour ?</h2>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <Input
-            label="Email ou Prénom"
-            placeholder="ex: sarah@gmail.com"
-            value={form.email}
-            onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
-            required
-            autoComplete="username"
-          />
-          {isChildLogin && (
-            <Input
-              label="Code Famille"
-              placeholder="ABCD12"
-              value={form.inviteCode}
-              onChange={e => setForm(p => ({ ...p, inviteCode: e.target.value.toUpperCase() }))}
-              required
-            />
+    <Layout title={"Content de te revoir !"} showBack onBack={() => navigate('/welcome')}>
+      <div className="space-y-5">
+        <Segmented label="Je me connecte en tant que" options={LOGIN_ROLES} value={role} onChange={setRole} />
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          {isChild ? (
+            <>
+              <Input label="Ton prénom" placeholder="Alice" value={form.name} onChange={set('name')} required autoComplete="username" />
+              <Input label="Code famille" placeholder="ABCD12" value={form.inviteCode} onChange={e => setForm(p => ({ ...p, inviteCode: e.target.value.toUpperCase() }))} required />
+            </>
+          ) : (
+            <Input label="Email" type="email" placeholder="ex: sarah@gmail.com" value={form.email} onChange={set('email')} required autoComplete="username" />
           )}
           <Input
             label="Mot de passe"
             type={showPw ? 'text' : 'password'}
             placeholder="••••••••"
             value={form.password}
-            onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
+            onChange={set('password')}
             required
             autoComplete="current-password"
             suffix={
-              <button type="button" onClick={() => setShowPw(!showPw)} aria-label={showPw ? 'Masquer le mot de passe' : 'Afficher le mot de passe'} aria-pressed={showPw} className="text-on-surface-variant p-2">
+              <button type="button" onClick={() => setShowPw(!showPw)} aria-label={showPw ? 'Masquer le mot de passe' : 'Afficher le mot de passe'} aria-pressed={showPw} className="w-11 h-11 flex items-center justify-center text-on-surface-variant">
                 {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             }
           />
-          <Btn type="submit" full loading={loading} size="lg" className="h-16 shadow-clay-primary text-lg mt-4">Me connecter</Btn>
-          <Link to="/forgot-password" className="block text-center text-sm font-bold text-primary hover:underline pt-2">Mot de passe oublié ?</Link>
+          <Btn type="submit" full size="lg" loading={loading} className="mt-1">Me connecter</Btn>
+          <Link to="/forgot-password" className="block text-center font-bold text-primary py-2">Mot de passe oublié ?</Link>
         </form>
       </div>
     </Layout>
   );
 }
 
-// ── Forgot / Reset Password Screens ──────────────────────────────────────
 export function ForgotPassword() {
   const navigate = useNavigate();
   const { showToast } = useApp();
@@ -182,7 +151,7 @@ export function ForgotPassword() {
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async e => {
     e.preventDefault();
     if (loading) return;
     setLoading(true);
@@ -199,22 +168,21 @@ export function ForgotPassword() {
 
   return (
     <Layout title="Mot de passe oublié" showBack onBack={() => navigate('/login')}>
-      <div className="max-w-md mx-auto py-8 px-4">
-        {sent ? (
-          <div className="text-center space-y-4">
-            <div className="w-16 h-16 mx-auto rounded-2xl bg-secondary-container/40 flex items-center justify-center text-secondary"><Mail size={32} /></div>
-            <h2 className="text-2xl font-headline font-black text-on-surface tracking-tight">Vérifie ta boîte mail</h2>
-            <p className="text-sm text-on-surface-variant">Si un compte existe avec cet email, un lien de réinitialisation vient d'être envoyé (valable 1 heure).</p>
-            <Btn variant="outline" full onClick={() => navigate('/login')}>Retour à la connexion</Btn>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <p className="text-sm text-on-surface-variant text-center">Entre ton email de parent, on t'enverra un lien pour choisir un nouveau mot de passe. Enfant ? Demande à ton parent de le changer dans tes réglages.</p>
-            <Input label="Email" type="email" placeholder="votre@email.com" value={email} onChange={e => setEmail(e.target.value)} required />
-            <Btn type="submit" full loading={loading} size="lg" className="h-16 shadow-clay-primary text-lg">Envoyer le lien</Btn>
-          </form>
-        )}
-      </div>
+      {sent ? (
+        <div className="text-center space-y-4">
+          <div className="w-16 h-16 mx-auto rounded-full bg-primary-container text-on-primary-container flex items-center justify-center"><Mail size={30} aria-hidden="true" /></div>
+          <h2 className={`${heading} text-2xl`}>Vérifie ta boîte mail</h2>
+          <p className="text-on-surface-variant">Si un compte existe avec cet email, un lien de réinitialisation vient d'être envoyé (valable 1 heure).</p>
+          <Btn variant="outline" full onClick={() => navigate('/login')}>Retour à la connexion</Btn>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <p className="text-[17px] leading-snug">Entre ton email de parent, tu recevras un lien pour choisir un nouveau mot de passe.</p>
+          <p className="px-4 py-3.5 rounded-[14px] bg-primary-container text-on-primary-container leading-snug">Tu es un enfant ? Demande à ton parent de le changer dans tes réglages.</p>
+          <Input label="Email" type="email" placeholder="votre@email.com" value={email} onChange={e => setEmail(e.target.value)} required />
+          <Btn type="submit" full size="lg" loading={loading}>Envoyer le lien</Btn>
+        </form>
+      )}
     </Layout>
   );
 }
@@ -228,7 +196,7 @@ export function ResetPassword() {
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async e => {
     e.preventDefault();
     if (loading) return;
     if (password.length < 6) return showToast('6 caractères minimum.', 'error');
@@ -246,23 +214,36 @@ export function ResetPassword() {
   };
 
   if (!token) {
-    return <Layout title="Lien invalide" showBack onBack={() => navigate('/login')}><div className="text-center py-20"><p className="font-bold text-on-surface-variant">Lien de réinitialisation manquant ou invalide.</p></div></Layout>;
+    return <Layout title="Lien invalide" showBack onBack={() => navigate('/login')}><p className="text-center py-12 font-bold text-on-surface-variant">Lien de réinitialisation manquant ou invalide.</p></Layout>;
   }
 
   return (
     <Layout title="Nouveau mot de passe" showBack onBack={() => navigate('/login')}>
-      <div className="max-w-md mx-auto py-8 px-4">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <Input label="Nouveau mot de passe" type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required />
-          <Input label="Confirmer le mot de passe" type="password" placeholder="••••••••" value={confirm} onChange={e => setConfirm(e.target.value)} required />
-          <Btn type="submit" full loading={loading} size="lg" className="h-16 shadow-clay-primary text-lg">Définir le mot de passe</Btn>
-        </form>
-      </div>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Input label="Nouveau mot de passe" type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required />
+        <Input label="Confirmer le mot de passe" type="password" placeholder="••••••••" value={confirm} onChange={e => setConfirm(e.target.value)} required />
+        <Btn type="submit" full size="lg" loading={loading}>Définir le mot de passe</Btn>
+      </form>
     </Layout>
   );
 }
 
-// ── Sign Up Screen ─────────────────────────────────────────────────────────
+const SIGNUP_MODES = [
+  { mode: 'parent-create', title: 'Parent, nouvelle famille', description: 'Je démarre PocketMoney.' },
+  { mode: 'parent-join', title: 'Parent, famille existante', description: "J'ai un code famille." },
+  { mode: 'child', title: 'Enfant', description: "Mon parent m'a donné un code." },
+];
+
+function Steps({ current, total }) {
+  return (
+    <div role="img" aria-label={`Étape ${current} sur ${total}`} className="flex gap-1.5 mb-5">
+      {Array.from({ length: total }, (_, i) => (
+        <div key={i} className={`flex-1 h-2.5 rounded-full ${i < current ? 'bg-primary' : 'bg-outline-variant'}`} />
+      ))}
+    </div>
+  );
+}
+
 export function SignUp() {
   const navigate = useNavigate();
   const { registerParentCreate, registerParentJoin, registerChild, showToast } = useApp();
@@ -273,45 +254,32 @@ export function SignUp() {
   const [parentalConsent, setParentalConsent] = useState(false);
   const [rules, setRules] = useState([
     { title: 'Chambre non rangée', amount: '2' },
-    { title: 'Gros mot', amount: '1' }
+    { title: 'Gros mot', amount: '1' },
   ]);
   const [loading, setLoading] = useState(false);
+  const set = key => e => setForm(p => ({ ...p, [key]: e.target.value }));
+  const isChild = mode === 'child';
+  const totalSteps = mode === 'parent-create' ? 3 : 2;
 
-  const handleAddRule = () => setRules([...rules, { title: '', amount: '' }]);
-  const handleRemoveRule = (index) => setRules(rules.filter((_, i) => i !== index));
-  const handleRuleChange = (index, field, value) => {
-    const newRules = [...rules];
-    newRules[index][field] = value;
-    setRules(newRules);
-  };
+  const handleRuleChange = (index, field, value) => setRules(rules.map((rule, i) => (i === index ? { ...rule, [field]: value } : rule)));
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async e => {
     if (e) e.preventDefault();
     if (loading) return;
     setLoading(true);
     try {
+      const { name, email, password, familyName, inviteCode, age } = form;
       let res;
       if (mode === 'parent-create') {
-        res = await registerParentCreate({ 
-          name: form.name, 
-          email: form.email, 
-          password: form.password, 
-          familyName: form.familyName,
-          acceptTerms,
-          parentalConsent,
-          rules: rules.filter(r => r.title && r.amount)
-        });
+        res = await registerParentCreate({ name, email, password, familyName, acceptTerms, parentalConsent, rules: rules.filter(r => r.title && r.amount) });
       } else if (mode === 'parent-join') {
-        res = await registerParentJoin({ name: form.name, email: form.email, password: form.password, inviteCode: form.inviteCode, acceptTerms, parentalConsent });
-      } else if (mode === 'child') {
-        res = await registerChild({ name: form.name, password: form.password, inviteCode: form.inviteCode, age: parseInt(form.age) });
+        res = await registerParentJoin({ name, email, password, inviteCode, acceptTerms, parentalConsent });
+      } else {
+        res = await registerChild({ name, password, inviteCode, age: parseInt(age, 10) });
       }
-      
-      if (res && res.user) {
-        navigate(res.user.role === 'PARENT' ? '/parent' : '/child');
-      }
+      if (res && res.user) navigate(res.user.role === 'PARENT' ? '/parent' : '/child');
     } catch (err) {
-      console.error("Signup failed", err);
+      console.error('Signup failed', err);
     } finally {
       setLoading(false);
     }
@@ -319,44 +287,19 @@ export function SignUp() {
 
   if (step === 'choice') {
     return (
-      <Layout title="Inscription" showBack onBack={() => navigate('/welcome')}>
-        <div className="max-w-md mx-auto space-y-4 px-4">
-          <button onClick={() => { setMode('parent-create'); setStep('form'); }} className="w-full text-left">
-            <Card hover className="p-6 flex items-center gap-5 border-2 border-transparent hover:border-primary/20 transition-all">
-              <div className="w-16 h-16 rounded-2xl bg-primary-container/40 flex items-center justify-center text-primary shadow-inner">
-                <Plus size={32} strokeWidth={2.5} />
-              </div>
-              <div className="flex-1">
-                <p className="font-extrabold text-on-surface text-lg tracking-tight">Parent : Créer une famille</p>
-                <p className="text-xs text-on-surface-variant">Démarrez votre gestion.</p>
-              </div>
-              <ChevronRight size={24} className="text-outline-variant" />
-            </Card>
-          </button>
-
-          <button onClick={() => { setMode('parent-join'); setStep('form'); }} className="w-full text-left">
-            <Card hover className="p-6 flex items-center gap-5 border-2 border-transparent hover:border-secondary/20 transition-all">
-              <div className="w-16 h-16 rounded-2xl bg-secondary-container/40 flex items-center justify-center text-secondary shadow-inner">
-                <Users size={32} strokeWidth={2.5} />
-              </div>
-              <div className="flex-1">
-                <p className="font-extrabold text-on-surface text-lg tracking-tight">Parent : Rejoindre une famille</p>
-              </div>
-              <ChevronRight size={24} className="text-outline-variant" />
-            </Card>
-          </button>
-
-          <button onClick={() => { setMode('child'); setStep('form'); }} className="w-full text-left">
-            <Card hover className="p-6 flex items-center gap-5 border-2 border-transparent hover:border-tertiary/20 transition-all">
-              <div className="w-16 h-16 rounded-2xl bg-tertiary-container/40 flex items-center justify-center text-tertiary shadow-inner">
-                <User size={32} strokeWidth={2.5} />
-              </div>
-              <div className="flex-1">
-                <p className="font-extrabold text-on-surface text-lg tracking-tight">Enfant : Créer mon compte</p>
-              </div>
-              <ChevronRight size={24} className="text-outline-variant" />
-            </Card>
-          </button>
+      <Layout title="Qui es-tu ?" showBack onBack={() => navigate('/welcome')}>
+        <div className="flex flex-col gap-3">
+          {SIGNUP_MODES.map(item => (
+            <button
+              key={item.mode}
+              type="button"
+              onClick={() => { setMode(item.mode); setStep('form'); }}
+              className="flex flex-col gap-0.5 p-[18px] min-h-[92px] rounded-[20px] border-2 border-line bg-surface shadow-press text-left active:translate-y-1 active:shadow-none transition-all"
+            >
+              <span className={`${heading} text-[22px]`}>{item.title}</span>
+              <span className="text-on-surface-variant">{item.description}</span>
+            </button>
+          ))}
         </div>
       </Layout>
     );
@@ -364,166 +307,79 @@ export function SignUp() {
 
   if (step === 'rules') {
     return (
-      <Layout title="Règles Familiales" showBack onBack={() => setStep('form')}>
-        <div className="max-w-md mx-auto py-8 px-4 space-y-8">
-          <div className="text-center">
-            <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center text-primary mx-auto mb-4">
-              <Shield size={32} />
-            </div>
-            <h2 className="text-2xl font-black tracking-tight">Définissez vos amendes</h2>
-            <p className="text-sm text-on-surface-variant mt-1">Ces montants seront déduits du solde de l'enfant en cas de manquement.</p>
-          </div>
-
-          <div className="space-y-4">
-            {rules.map((rule, index) => (
-              <div key={index} className="flex gap-3 items-end animate-fade-in">
-                <div className="flex-1">
-                  <Input 
-                    label={index === 0 ? "Motif de l'amende" : ""}
-                    aria-label={index === 0 ? undefined : "Motif de l'amende"} 
-                    placeholder="ex: Chambre en désordre" 
-                    value={rule.title} 
-                    onChange={(e) => handleRuleChange(index, 'title', e.target.value)}
-                  />
-                </div>
-                <div className="w-24">
-                  <Input 
-                    label={index === 0 ? "Prix (€)" : ""}
-                    aria-label={index === 0 ? undefined : "Prix (€)"} 
-                    type="number" 
-                    placeholder="2" 
-                    value={rule.amount} 
-                    onChange={(e) => handleRuleChange(index, 'amount', e.target.value)}
-                  />
-                </div>
-                <button 
-                  type="button"
-                  aria-label={`Retirer la règle ${index + 1}`}
-                  onClick={() => handleRemoveRule(index)}
-                  className="p-4 text-error hover:bg-error/10 rounded-xl transition-colors mb-1"
-                >
-                  <Trash2 size={20} />
-                </button>
+      <Layout title="Vos règles de famille" showBack onBack={() => setStep('form')}>
+        <Steps current={3} total={3} />
+        <div className="space-y-4">
+          <p className="text-[17px] leading-snug">Ces montants sont déduits en cas de manquement. Modifiables plus tard.</p>
+          {rules.map((rule, index) => (
+            <div key={index} className="flex gap-2 items-end">
+              <div className="flex-1 min-w-0">
+                <Input label={index === 0 ? 'Motif' : ''} aria-label={index === 0 ? undefined : "Motif de l'amende"} placeholder="ex: Chambre en désordre" value={rule.title} onChange={e => handleRuleChange(index, 'title', e.target.value)} />
               </div>
-            ))}
-          </div>
-
-          <button 
-            onClick={handleAddRule}
-            className="w-full py-4 border-2 border-dashed border-primary/20 rounded-2xl text-primary font-bold hover:bg-primary/5 transition-all"
-          >
-            + Ajouter une autre règle
-          </button>
-
-          <Btn full size="lg" loading={loading} onClick={handleSubmit} className="h-16 shadow-clay-primary text-lg mt-6">Créer ma famille</Btn>
+              <div className="w-24 flex-shrink-0">
+                <Input label={index === 0 ? 'Prix (€)' : ''} aria-label={index === 0 ? undefined : 'Prix (€)'} type="number" placeholder="2" value={rule.amount} onChange={e => handleRuleChange(index, 'amount', e.target.value)} />
+              </div>
+              <button type="button" aria-label={`Retirer la règle ${index + 1}`} onClick={() => setRules(rules.filter((_, i) => i !== index))} className="w-11 h-[54px] flex-shrink-0 flex items-center justify-center text-error">
+                <Trash2 size={20} />
+              </button>
+            </div>
+          ))}
+          <Btn full variant="outline" icon={Plus} onClick={() => setRules([...rules, { title: '', amount: '' }])}>Ajouter une règle</Btn>
+          <Btn full size="lg" variant="gold" loading={loading} onClick={handleSubmit}>Créer ma famille</Btn>
         </div>
       </Layout>
     );
   }
 
   return (
-    <Layout title="Vos informations" showBack onBack={() => setStep('choice')}>
-      <div className="max-w-md mx-auto py-8 px-4">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (form.password.length < 6 || form.password.length > 72) {
-              showToast('Le mot de passe doit contenir entre 6 et 72 caractères.', 'error');
-              return;
-            }
-            if (mode !== 'child' && (!acceptTerms || !parentalConsent)) {
-              showToast('Coche les deux cases pour continuer.', 'error');
-              return;
-            }
-            mode === 'parent-create' ? setStep('rules') : handleSubmit();
-          }}
-          className="space-y-6"
-        >
-          <Input
-            label={mode === 'child' ? "Ton prénom" : "Ton nom complet"}
-            placeholder={mode === 'child' ? "Alice" : "Sarah Dupont"}
-            value={form.name}
-            onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-            required
-          />
-          
-          {(mode === 'parent-create' || mode === 'parent-join') && (
-            <Input
-              label="Adresse Email"
-              type="email"
-              placeholder="votre@email.com"
-              value={form.email}
-              onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
-              required
+    <Layout title={isChild ? 'Ton compte' : 'Vos informations'} showBack onBack={() => setStep('choice')}>
+      <Steps current={2} total={totalSteps} />
+      <form
+        className="flex flex-col gap-4"
+        onSubmit={e => {
+          e.preventDefault();
+          if (form.password.length < 6 || form.password.length > 72) {
+            showToast('Le mot de passe doit contenir entre 6 et 72 caractères.', 'error');
+            return;
+          }
+          if (!isChild && (!acceptTerms || !parentalConsent)) {
+            showToast('Coche les deux cases pour continuer.', 'error');
+            return;
+          }
+          if (mode === 'parent-create') setStep('rules');
+          else handleSubmit();
+        }}
+      >
+        <Input label={isChild ? 'Ton prénom' : 'Ton nom'} placeholder={isChild ? 'Alice' : 'Sarah Dupont'} value={form.name} onChange={set('name')} required />
+        {!isChild && <Input label="Email" type="email" placeholder="votre@email.com" value={form.email} onChange={set('email')} required />}
+        {isChild && <Input label="Âge" type="number" placeholder="8" value={form.age} onChange={set('age')} required />}
+        <Input label="Mot de passe" type="password" placeholder="••••••••" value={form.password} onChange={set('password')} required />
+        {mode === 'parent-create' && <Input label="Nom de la famille" placeholder="ex: Les Dupont" value={form.familyName} onChange={set('familyName')} required />}
+        {mode !== 'parent-create' && (
+          <Input label="Code famille" placeholder="ABCD12" value={form.inviteCode} onChange={e => setForm(p => ({ ...p, inviteCode: e.target.value.toUpperCase() }))} required />
+        )}
+
+        {!isChild && (
+          <div className="space-y-3">
+            <Checkbox
+              checked={acceptTerms}
+              onChange={setAcceptTerms}
+              label={<>J'accepte les <Link to="/terms" target="_blank" rel="noopener" className="text-primary underline">conditions d'utilisation</Link> et la <Link to="/privacy" target="_blank" rel="noopener" className="text-primary underline">politique de confidentialité</Link>.</>}
             />
-          )}
+            <Checkbox checked={parentalConsent} onChange={setParentalConsent} label="Je suis titulaire de l'autorité parentale et j'autorise le traitement des données des enfants à qui je donne le code famille." />
+          </div>
+        )}
 
-          {mode === 'child' && (
-            <Input
-              label="Âge"
-              type="number"
-              placeholder="8"
-              value={form.age}
-              onChange={e => setForm(p => ({ ...p, age: e.target.value }))}
-              required
-            />
-          )}
+        {isChild && (
+          <p className="text-[15px] text-on-surface-variant">
+            En créant ton compte avec le code donné par ton parent, tu rejoins sa famille. <Link to="/privacy" target="_blank" rel="noopener" className="text-primary underline">Comment tes données sont protégées</Link>.
+          </p>
+        )}
 
-          <Input
-            label="Mot de passe"
-            type="password"
-            placeholder="••••••••"
-            value={form.password}
-            onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
-            required
-          />
-
-          {mode === 'parent-create' && (
-            <Input
-              label="Nom de la famille"
-              placeholder="ex: Les Dupont"
-              value={form.familyName}
-              onChange={e => setForm(p => ({ ...p, familyName: e.target.value }))}
-              required
-            />
-          )}
-
-          {(mode === 'parent-join' || mode === 'child') && (
-            <Input
-              label="Code Famille (Invite Code)"
-              placeholder="ABCD12"
-              value={form.inviteCode}
-              onChange={e => setForm(p => ({ ...p, inviteCode: e.target.value.toUpperCase() }))}
-              required
-            />
-          )}
-
-          {mode !== 'child' && (
-            <div className="space-y-4">
-              <Checkbox
-                checked={acceptTerms}
-                onChange={setAcceptTerms}
-                label={<>J'accepte les <Link to="/terms" target="_blank" rel="noopener" className="text-primary underline">conditions d'utilisation</Link> et la <Link to="/privacy" target="_blank" rel="noopener" className="text-primary underline">politique de confidentialité</Link>.</>}
-              />
-              <Checkbox
-                checked={parentalConsent}
-                onChange={setParentalConsent}
-                label="Je suis titulaire de l'autorité parentale et j'autorise le traitement des données des enfants à qui je donne le code famille."
-              />
-            </div>
-          )}
-
-          {mode === 'child' && (
-            <p className="text-xs text-on-surface-variant">
-              En créant ton compte avec le code donné par ton parent, tu rejoins sa famille. <Link to="/privacy" target="_blank" rel="noopener" className="text-primary underline">Comment tes données sont protégées</Link>.
-            </p>
-          )}
-
-          <Btn type="submit" full loading={loading} size="lg" className="h-16 shadow-clay-primary text-lg mt-6">
-            {mode === 'parent-create' ? "Suivant : Configurer les règles" : "Créer mon compte"}
-          </Btn>
-        </form>
-      </div>
+        <Btn type="submit" full size="lg" loading={loading} className="mt-1">
+          {mode === 'parent-create' ? 'Suivant : Configurer les règles' : 'Créer mon compte'}
+        </Btn>
+      </form>
     </Layout>
   );
 }

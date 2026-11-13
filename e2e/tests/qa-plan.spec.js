@@ -15,11 +15,9 @@ const acceptBoxes = async page => {
   await page.getByText("Je suis titulaire de l'autorité parentale").click();
 };
 
-const acceptDialogs = page => page.on('dialog', dialog => dialog.accept());
-
 test.describe('plan QA, inscription et comptes', () => {
   test('sans les deux cases, inscription parent refusée', async ({ page }) => {
-    await signupParent(page, 'Parent : Rejoindre une famille', 'refus@dupont.fr');
+    await signupParent(page, 'Parent, famille existante', 'refus@dupont.fr');
     await page.getByPlaceholder('ABCD12').fill(INVITE_CODE);
     await page.getByRole('button', { name: 'Créer mon compte' }).click();
     await expect(toast(page, 'Coche les deux cases')).toBeVisible();
@@ -27,7 +25,7 @@ test.describe('plan QA, inscription et comptes', () => {
   });
 
   test('un parent rejoint une famille, puis supprime son compte', async ({ page }) => {
-    await signupParent(page, 'Parent : Rejoindre une famille', 'paul@dupont.fr');
+    await signupParent(page, 'Parent, famille existante', 'paul@dupont.fr');
     await page.getByPlaceholder('ABCD12').fill(INVITE_CODE);
     await acceptBoxes(page);
     await page.getByRole('button', { name: 'Créer mon compte' }).click();
@@ -70,7 +68,7 @@ test.describe('plan QA, inscription et comptes', () => {
 
     await page.context().clearCookies();
     await page.goto('/login');
-    await page.getByPlaceholder('ex: sarah@gmail.com').fill('Alice');
+    await page.getByPlaceholder('Alice').fill('Alice');
     await page.getByPlaceholder('ABCD12').fill(INVITE_CODE);
     await page.getByPlaceholder('••••••••').fill('nouveau-secret');
     await page.getByRole('button', { name: 'Me connecter' }).click();
@@ -94,17 +92,16 @@ test.describe('plan QA, espace parent', () => {
   test('la recherche filtre les corvées', async ({ page }) => {
     await loginAsParent(page);
     await page.goto('/parent/chores');
-    const cards = page.locator('main [role="button"]');
+    const cards = page.locator('main section a');
     await expect(cards.first()).toBeVisible();
-    await page.getByPlaceholder('Rechercher une tâche...').fill('zzzz-aucun-resultat');
+    await page.getByPlaceholder('Rechercher une corvée').fill('zzzz-aucun-resultat');
     await expect(cards).toHaveCount(0);
   });
 
   test('une règle se crée, se modifie et se supprime', async ({ page }) => {
-    acceptDialogs(page);
     await loginAsParent(page);
     await page.goto('/parent/rules');
-    await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
+    await page.getByRole('button', { name: 'Ajouter une règle' }).click();
     await page.getByLabel('Motif').fill('Règle QA');
     await page.getByLabel('Montant (€)').fill('3');
     await page.getByRole('button', { name: 'Enregistrer' }).click();
@@ -116,6 +113,7 @@ test.describe('plan QA, espace parent', () => {
     await expect(page.getByText('Règle QA modifiée')).toBeVisible();
 
     await page.getByRole('button', { name: 'Supprimer Règle QA modifiée' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Supprimer' }).click();
     await expect(page.getByText('Règle QA modifiée')).toBeHidden();
   });
 
@@ -125,17 +123,16 @@ test.describe('plan QA, espace parent', () => {
     await expect(page.getByRole('heading', { name: 'Comparaison entre enfants' })).toBeVisible();
 
     await page.goto('/parent/settings');
-    await expect(page.getByLabel('Nom de la tribu')).not.toHaveValue('');
     await expect(page.getByText(INVITE_CODE)).toBeVisible();
 
     await page.goto('/parent/children');
-    await page.getByRole('button', { name: 'Ajouter un enfant' }).click();
-    await expect(page).toHaveURL(/\/parent\/settings$/);
+    await expect(page.getByRole('heading', { name: 'Ajouter un enfant' })).toBeVisible();
+    await expect(page.getByText(INVITE_CODE)).toBeVisible();
   });
 
   test('une famille sans enfant ne peut pas créer de corvée', async ({ page, isMobile }) => {
     test.skip(isMobile, "Évite de dépasser la limite d'inscriptions par IP, le rendu est couvert par layout.spec.");
-    await signupParent(page, 'Parent : Créer une famille', 'solo@dupont.fr');
+    await signupParent(page, 'Parent, nouvelle famille', 'solo@dupont.fr');
     await page.getByPlaceholder('ex: Les Dupont').fill('Les Solo');
     await acceptBoxes(page);
     await page.getByRole('button', { name: 'Suivant : Configurer les règles' }).click();
@@ -148,13 +145,13 @@ test.describe('plan QA, espace parent', () => {
 
 test.describe('plan QA, espace enfant', () => {
   for (const [path, heading] of [
-    ['/child/available-chores', 'Quêtes Disponibles'],
-    ['/child/my-chores', 'Mes Exploits'],
+    ['/child/available-chores', 'Mes quêtes'],
+    ['/child/my-chores', 'Mes quêtes'],
     ['/child/balance', 'Mon Trésor'],
-    ['/child/goals', 'Mes Grands Rêves'],
-    ['/child/profile', 'Mon Espace'],
+    ['/child/goals', 'Mes rêves'],
+    ['/child/profile', 'Alice'],
   ]) {
-    test(`${heading} s'affiche`, async ({ page }) => {
+    test(`${path} affiche ${heading}`, async ({ page }) => {
       await loginAsChild(page, 'Alice');
       await page.goto(path);
       await expect(page.getByRole('heading', { name: heading }).locator('visible=true').first()).toBeVisible();

@@ -14,9 +14,10 @@
   ports 80 et 443 ouverts.
 - [ ] **Remplir `.env`** à partir de `.env.production.example` : `DOMAIN`, secrets
   générés (`POSTGRES_PASSWORD`, `JWT_SECRET`), identité de l'éditeur (`LEGAL_*`).
-- [ ] **Lancer `docker compose up -d --build` et valider la pile complète.** Elle n'a
-  jamais tourné en entier : nginx, certificat Caddy, `/api/health`, temps réel,
-  sauvegardes et `monitor` sont à vérifier sur le serveur.
+- [ ] **Lancer `docker compose up -d --build` sur le serveur.** La pile complète est
+  testée en CI (job `stack`, `deploy/stack-test.sh`) sur `localhost` avec un
+  certificat interne. Restent à voir sur le serveur : le vrai certificat Let's
+  Encrypt et `https://<domaine>/api/health`.
 - [ ] **Décider du sort des projets Vercel**, qui déploient encore chaque branche alors
   que Docker est la seule cible de production.
 

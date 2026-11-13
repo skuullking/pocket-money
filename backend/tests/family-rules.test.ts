@@ -29,6 +29,21 @@ describe('famille', () => {
     expect(res.body.children.map((c: { id: string }) => c.id)).toEqual([child.id]);
   });
 
+  it('renvoie les enfants triés par prénom, quel que soit leur ordre de création', async () => {
+    const { parent } = await createFamily('Dupont', [{ name: 'Zoé' }, { name: 'Alice' }, { name: 'Malo' }]);
+    const names = (list: { name: string; role?: string }[]) => list.filter(u => u.role !== 'PARENT').map(u => u.name);
+    expect(names((await as(parent).get('/api/family').expect(200)).body.family.users)).toEqual([
+      'Alice',
+      'Malo',
+      'Zoé',
+    ]);
+    expect(names((await as(parent).get('/api/family/children').expect(200)).body.children)).toEqual([
+      'Alice',
+      'Malo',
+      'Zoé',
+    ]);
+  });
+
   it('un enfant ne voit que ses propres transactions', async () => {
     const {
       children: [alice, bob],

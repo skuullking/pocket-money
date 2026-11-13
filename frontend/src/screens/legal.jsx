@@ -16,7 +16,7 @@ const host = HOST || '[hébergeur à compléter]';
 function Section({ title, children }) {
   return (
     <section className="space-y-2">
-      <h2 className="font-headline font-black text-xl text-on-surface tracking-tight">{title}</h2>
+      <h2 className="font-headline font-extrabold text-xl text-on-surface tracking-tight">{title}</h2>
       <div className="text-sm text-on-surface-variant leading-relaxed space-y-2">{children}</div>
     </section>
   );
@@ -24,17 +24,11 @@ function Section({ title, children }) {
 
 function LegalPage({ title, children }) {
   const navigate = useNavigate();
-  // Sans session, Layout n'affiche ni titre ni bouton retour.
   const { user } = useApp();
   return (
-    <Layout title={title} showBack onBack={() => navigate(-1)}>
-      <article className="max-w-2xl mx-auto py-4 space-y-6">
-        {!user && (
-          <>
-            <Link to="/welcome" className="text-sm font-bold text-primary underline">Retour à l'accueil</Link>
-            <h1 className="text-3xl font-headline font-black text-on-surface tracking-tight">{title}</h1>
-          </>
-        )}
+    <Layout title={title} showBack onBack={() => navigate(-1)} width="max-w-2xl">
+      <article className="space-y-6">
+        {!user && <Link to="/welcome" className="text-sm font-bold text-primary underline">Retour à l'accueil</Link>}
         {INCOMPLETE && (
           <p role="note" className="rounded-2xl bg-error-container text-on-error-container text-sm font-bold p-4">
             Document provisoire : les informations de l'éditeur restent à compléter avant l'ouverture au public.
