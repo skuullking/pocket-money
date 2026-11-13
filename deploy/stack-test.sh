@@ -84,6 +84,15 @@ ok "requêtes d'une autre origine refusées"
 
 # ── Temps réel ─────────────────────────────────────────────────────────────
 cookie=$(awk '!/^#/ || /^#HttpOnly_/ {sub(/^#HttpOnly_/, ""); if (NF >= 7) printf "%s=%s; ", $6, $7}' "$JAR")
+contains "$cookie" 'pm_session=' || fail "cookie de session illisible dans $JAR"
+# Handshake HTTP d'abord : sépare un souci de proxy d'un souci de WebSocket.
+handshake=$("${CURL[@]}" -H "Origin: $BASE" -H "Cookie: $cookie" "$BASE/socket.io/?EIO=4&transport=polling")
+contains "$handshake" '"sid"' || fail "handshake Socket.IO en polling : $handshake"
+upgrade=$(curl -sk --http1.1 --max-time 5 -o /dev/null -w '%{http_code}' \
+  -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \
+  -H 'Sec-WebSocket-Key: c3RhY2stdGVzdC1rZXktMTI=' -H "Origin: $BASE" -H "Cookie: $cookie" \
+  "$BASE/socket.io/?EIO=4&transport=websocket" || true)
+echo "upgrade WebSocket via Caddy et nginx : HTTP $upgrade"
 NODE_TLS_REJECT_UNAUTHORIZED=0 SOCKET_COOKIE="$cookie" SOCKET_URL="$BASE" \
   node deploy/socket-check.mjs || fail "Socket.IO"
 ok "Socket.IO en WebSocket, authentifié par le cookie"
