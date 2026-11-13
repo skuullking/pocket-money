@@ -523,8 +523,9 @@ export function Toast({ toast }) {
   return (
     <div role="status" aria-live="polite">
       {toast && (
-        <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[300] w-max max-w-[90vw] animate-pop-in">
-          <div className={`${bg} rounded-2xl px-5 py-3.5 flex items-center gap-3 shadow-press`}>
+        // L'animation anime `transform` : sur l'enveloppe, elle écraserait le centrage.
+        <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[300] w-max max-w-[90vw]">
+          <div className={`${bg} rounded-2xl px-5 py-3.5 flex items-center gap-3 shadow-press animate-pop-in`}>
             <Icon size={22} strokeWidth={2.6} className="shrink-0" aria-hidden="true" />
             <p className="text-base font-bold leading-snug">{toast.message}</p>
           </div>
