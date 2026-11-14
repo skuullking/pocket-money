@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Eye, EyeOff, Mail, Plus, Trash2, Wallet } from 'lucide-react';
+import { Eye, EyeOff, Mail, Plus, Sparkles, Trash2, Wallet } from 'lucide-react';
 import { useApp } from '../context';
-import { authAPI } from '../api';
+import { authAPI, demoAPI } from '../api';
 import { Avatar, Btn, Checkbox, Input, Segmented } from '../components/ui';
 import { Layout } from '../components/layout';
 
@@ -26,8 +26,27 @@ export function Splash({ onFinish }) {
 }
 
 export function Welcome() {
-  const { family, cachedFamilyMembers } = useApp();
+  const { family, cachedFamilyMembers, startDemo } = useApp();
   const navigate = useNavigate();
+  const [demoEnabled, setDemoEnabled] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    demoAPI.status().then(r => active && setDemoEnabled(!!r.enabled)).catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  const tryDemo = async () => {
+    if (demoLoading) return;
+    setDemoLoading(true);
+    try {
+      await startDemo();
+      navigate('/parent');
+    } catch {
+      setDemoLoading(false);
+    }
+  };
   // `family` n'est rempli qu'après la connexion : sur cet écran, on retombe
   // sur la dernière famille vue depuis cet appareil.
   const quickAccess = family?.users?.filter(u => u.role === 'CHILD') || cachedFamilyMembers || [];
@@ -39,7 +58,10 @@ export function Welcome() {
           <div className="w-[90%] h-[90%] rounded-full bg-gold border-4 border-gold-edge flex items-center justify-center font-headline font-extrabold text-[170px] lg:text-[250px] text-gold-edge">€</div>
         </div>
 
-        <span className={`${heading} relative text-2xl`}>PocketMoney</span>
+        <span className={`${heading} relative text-2xl flex items-center gap-2.5`}>
+          PocketMoney
+          <span className="font-body text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border-2 border-white/70">Bêta</span>
+        </span>
 
         <div className="relative mt-auto lg:my-auto max-w-[32rem] flex flex-col gap-3.5">
           <h1 className={`${heading} text-[56px] lg:text-[80px] leading-[0.98] tracking-[-0.04em]`}>L'argent de poche, ça se gagne.</h1>
@@ -61,7 +83,13 @@ export function Welcome() {
             </div>
           )}
 
-          <Btn full size="lg" variant="gold" className="mt-1.5 !shadow-[0_5px_0_#1A1640]" onClick={() => navigate('/login')}>Se connecter</Btn>
+          {demoEnabled && (
+            <Btn full size="lg" variant="gold" className="mt-1.5 !shadow-[0_5px_0_#1A1640]" icon={Sparkles} loading={demoLoading} onClick={tryDemo}>
+              Essayer la démo
+            </Btn>
+          )}
+          <Btn full size="lg" variant={demoEnabled ? 'outline' : 'gold'} className={demoEnabled ? '' : 'mt-1.5 !shadow-[0_5px_0_#1A1640]'} onClick={() => navigate('/login')}>Se connecter</Btn>
+          {demoEnabled && <p className="text-center text-sm -mt-1">Démo sans inscription, effacée au bout de 24 h.</p>}
           <Link to="/signup" className="flex items-center justify-center min-h-[54px] rounded-2xl border-2 border-white font-bold text-[17px]">Créer une famille</Link>
           <div className="flex justify-center gap-[18px] text-sm">
             <Link to="/privacy" className="underline py-2">Confidentialité</Link>

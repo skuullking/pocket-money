@@ -38,13 +38,14 @@ services:
       - "80"
     environment:
       # schema.prisma declares provider = "postgresql" — this must stay a
-      # postgresql:// URL, not a SQLite file: path (see QA_BUG_REPORT.md, ENV-1).
+      # postgresql:// URL, not a SQLite file: path (see docs/QA_BUG_REPORT.md, ENV-1).
       DATABASE_URL: postgresql://pocketmoney:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant}@db:5432/pocketmoney
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET manquant, voir .env.production.example}
       JWT_EXPIRES_IN: 7d
       SENTRY_DSN: ${SENTRY_DSN:-}
       ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
       ALERT_5XX_THRESHOLD: ${ALERT_5XX_THRESHOLD:-10}
+      DEMO_ENABLED: ${DEMO_ENABLED:-false}
       RESEND_API_KEY: ${RESEND_API_KEY:?RESEND_API_KEY manquant, voir .env.production.example}
       EMAIL_FROM: ${EMAIL_FROM:?EMAIL_FROM manquant, voir .env.production.example}
       PORT: 3001

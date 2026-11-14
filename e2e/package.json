@@ -5,7 +5,8 @@
   "scripts": {
     "test": "playwright test",
     "test:ui": "playwright test --ui",
-    "report": "playwright show-report"
+    "report": "playwright show-report",
+    "showcase": "playwright test --config showcase.config.js && python showcase/make_gif.py"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",

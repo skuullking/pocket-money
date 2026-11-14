@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useApp } from '../src/context';
 import { SignIn, Welcome } from '../src/screens/auth.jsx';
+import { demoAPI } from '../src/api';
 import {
   AvailableChores,
   BalanceScreen,
@@ -90,6 +91,27 @@ describe('connexion', () => {
 
     expect(location()).toBe('/login');
     expect(context.login).not.toHaveBeenCalled();
+  });
+});
+
+describe('démo', () => {
+  it("le bouton n'apparaît que si le serveur active la démo", async () => {
+    vi.spyOn(demoAPI, 'status').mockResolvedValue({ enabled: false });
+    provide();
+    renderScreen(Welcome, { path: '/welcome' });
+    await waitFor(() => expect(demoAPI.status).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: /Essayer la démo/ })).not.toBeInTheDocument();
+  });
+
+  it('lance la démo et ouvre l’espace parent', async () => {
+    vi.spyOn(demoAPI, 'status').mockResolvedValue({ enabled: true });
+    const context = provide({ startDemo: vi.fn().mockResolvedValue({}) });
+    renderScreen(Welcome, { path: '/welcome' });
+
+    await userEvent.click(await screen.findByRole('button', { name: /Essayer la démo/ }));
+
+    expect(context.startDemo).toHaveBeenCalled();
+    await waitFor(() => expect(location()).toBe('/parent'));
   });
 });
 

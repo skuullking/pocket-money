@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   BarChart2, ChevronLeft, Home, Inbox, ListChecks, Settings, Shield, SlidersHorizontal,
   Target, User, Users, Wallet, Zap,
@@ -128,6 +128,43 @@ function Sidebar({ role }) {
 }
 
 // `bare` : l'écran gère tout son espace (héros en pleine largeur) et son propre titre.
+// Bandeau des familles de démo : rappelle que tout sera effacé et permet de voir
+// l'app côté parent ou côté enfant sans mot de passe.
+function DemoBar() {
+  const { user, family, switchDemoUser } = useApp();
+  const navigate = useNavigate();
+  if (!user || !family?.demoExpiresAt) return null;
+
+  const switchTo = async member => {
+    if (member.id === user.id) return;
+    try {
+      await switchDemoUser(member.id);
+      navigate(member.role === 'PARENT' ? '/parent' : '/child');
+    } catch { /* le toast est déjà affiché */ }
+  };
+
+  return (
+    <div role="region" aria-label="Mode démo" className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 sm:px-6 lg:px-12 py-2.5 bg-gold text-on-gold border-b-2 border-gold-edge text-sm">
+      <span className="font-bold">Démo</span>
+      <span className="hidden sm:inline">Données fictives, effacées sous 24 h.</span>
+      <span className="ml-auto font-semibold">Voir en tant que</span>
+      <div className="flex gap-1.5">
+        {family.users.map(member => (
+          <button
+            key={member.id}
+            type="button"
+            onClick={() => switchTo(member)}
+            aria-pressed={member.id === user.id}
+            className={`px-3 min-h-[36px] rounded-full font-bold border-2 border-gold-edge ${member.id === user.id ? 'bg-on-gold text-gold' : 'bg-transparent'}`}
+          >
+            {member.name}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function Layout({ children, title, bare = false, showBack = false, onBack, headerRight, width }) {
   const { user, theme, toggleTheme, toast } = useApp();
   const hasNav = !!user;
@@ -152,6 +189,7 @@ export function Layout({ children, title, bare = false, showBack = false, onBack
       <Sidebar role={user?.role} />
 
       <div className={hasNav ? 'lg:ml-64' : ''}>
+        <DemoBar />
         {bare ? (
           <main id="contenu" tabIndex={-1} className={`outline-none ${hasNav ? 'pb-28 lg:pb-12' : ''}`}>{children}</main>
         ) : (

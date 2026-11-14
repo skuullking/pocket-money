@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
-import { accountAPI, authAPI, familyAPI, choresAPI, goalsAPI, transactionsAPI, rulesAPI, expensesAPI, childSettingsAPI, allowanceAPI, choreTemplatesAPI, SOCKET_URL } from './api';
+import { accountAPI, authAPI, demoAPI, familyAPI, choresAPI, goalsAPI, transactionsAPI, rulesAPI, expensesAPI, childSettingsAPI, allowanceAPI, choreTemplatesAPI, SOCKET_URL } from './api';
 
 // Un même événement doit provoquer un message différent selon qui le reçoit
 // (le parent ou l'enfant concerné) — pas de doublon, pas de bruit inutile.
@@ -145,10 +145,13 @@ export function AppProvider({ children }) {
 
       if (familyData) {
         setFamily(familyData.family);
-        const children = (familyData.family?.users || []).filter(u => u.role === 'CHILD')
-          .map(c => ({ id: c.id, name: c.name, avatar: c.avatar, color: c.color, inviteCode: familyData.family.inviteCode }));
-        setCachedFamilyMembers(children);
-        try { localStorage.setItem(CACHED_FAMILY_KEY, JSON.stringify(children)); } catch (e) {}
+        // Les enfants d'une démo disparaissent sous 24 h : pas d'accès rapide vers eux.
+        if (!familyData.family?.demoExpiresAt) {
+          const children = (familyData.family?.users || []).filter(u => u.role === 'CHILD')
+            .map(c => ({ id: c.id, name: c.name, avatar: c.avatar, color: c.color, inviteCode: familyData.family.inviteCode }));
+          setCachedFamilyMembers(children);
+          try { localStorage.setItem(CACHED_FAMILY_KEY, JSON.stringify(children)); } catch (e) {}
+        }
       }
       setChores(choresData.chores || []);
       setGoals(goalsData.goals || []);
@@ -169,6 +172,31 @@ export function AppProvider({ children }) {
   const login = async (credentials) => {
     try {
       const data = await authAPI.login(credentials);
+      setUser(data.user);
+      fetchUser();
+      return data;
+    } catch (error) {
+      showToast(error.message, 'error');
+      throw error;
+    }
+  };
+
+  const startDemo = async () => {
+    try {
+      const data = await demoAPI.start();
+      setUser(data.user);
+      fetchUser();
+      return data;
+    } catch (error) {
+      showToast(error.message, 'error');
+      throw error;
+    }
+  };
+
+  // Dans une démo, on passe du parent à un enfant sans mot de passe.
+  const switchDemoUser = async (userId) => {
+    try {
+      const data = await demoAPI.switchTo(userId);
       setUser(data.user);
       fetchUser();
       return data;
@@ -553,7 +581,7 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       user, loading, theme, toast, showConfetti, family, chores, goals, transactions, expenses, choreTemplates,
       cachedFamilyMembers,
-      login, registerParentCreate, registerParentJoin, registerChild, logout, showToast,
+      login, startDemo, switchDemoUser, registerParentCreate, registerParentJoin, registerChild, logout, showToast,
       triggerConfetti, addChore, approveChore, rejectChore, submitChore, editChore, deleteChore,
       fundGoal, withdrawFromGoal, requestExpense, approveExpense, rejectExpense,
       createRule, editRule, deleteRule, applyPenalty, updateChildSettings, updateAllowance, updateSplitSettings,

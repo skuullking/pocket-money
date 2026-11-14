@@ -11,6 +11,9 @@ const socket = io(url, {
   extraHeaders: { Cookie: process.env.SOCKET_COOKIE ?? '', Origin: url },
   reconnection: false,
   timeout: 10000,
+  // engine.io-client impose rejectUnauthorized: true, ce qui ignore
+  // NODE_TLS_REJECT_UNAUTHORIZED : sur localhost, Caddy signe avec sa propre CA.
+  rejectUnauthorized: process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0',
 });
 
 const timer = setTimeout(() => {
@@ -27,6 +30,8 @@ socket.on('connect', () => {
 
 socket.on('connect_error', (err) => {
   clearTimeout(timer);
-  console.error(`Socket.IO : ${err.message}`);
+  // L'erreur de transport porte la vraie cause (code HTTP, TLS, connexion refusée).
+  const cause = err.description?.error?.message || err.description?.message || '';
+  console.error(`Socket.IO : ${err.message}${cause ? ` (${cause})` : ''}`);
   process.exit(1);
 });

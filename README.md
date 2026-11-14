@@ -1,73 +1,96 @@
 # PocketMoney
 
-A family allowance tracker where parents assign chores and children earn money toward savings goals.
+**Pocket money that kids earn.** Parents assign chores, children send proof, parents approve and the child gets paid, in real time. Kids save toward goals, ask before spending, and learn what money is worth.
+
+[![CI](https://github.com/skuullking/pocket-money/actions/workflows/ci.yml/badge.svg)](https://github.com/skuullking/pocket-money/actions/workflows/ci.yml)
+![Tests](https://img.shields.io/badge/tests-800%2B-success)
+![Stack](https://img.shields.io/badge/stack-React%20·%20Express%20·%20PostgreSQL-6D3FD1)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](#license)
+
+<!-- Replace with the production URL after the first deployment. -->
+**▶ Live demo: coming soon.** One click, no signup: you get your own sample family, deleted after 24 hours.
+
+![A child submits a chore, the parent approves it, and the child's balance updates live](docs/screenshots/realtime.gif)
+
+*Left: Léa (child) sends a chore with a photo. Right: Camille (parent) receives it instantly, approves, and Léa's balance goes from 32,50 € to 35,50 € without a reload.*
+
+| Parent, desktop | Child, mobile |
+|---|---|
+| ![Parent dashboard](docs/screenshots/parent-dashboard-desktop.png) | ![Child dashboard](docs/screenshots/child-dashboard-mobile.png) |
+| ![Approval inbox](docs/screenshots/parent-inbox-desktop.png) | ![Savings goals](docs/screenshots/child-goals-mobile.png) |
+
+## Highlights
+
+- **A balance that can never go negative.** Every debit runs in a transaction with a row lock and is capped at the available balance, even under 10 concurrent requests.
+- **Recurring allowances without a cron.** Evaluated lazily when the app is opened, so none are missed after downtime and each is paid exactly once.
+- **Realtime that cannot corrupt state.** Socket.IO events only trigger a refetch: the server stays the source of truth.
+- **Secure by default.** The session lives in an httpOnly cookie, cross-site writes are refused, auth routes are rate limited, and the server refuses to start with a weak config.
+- **A per-visitor demo.** Each visitor gets an isolated family that deletes itself after 24 hours, and can switch between the parent and child views.
+- **Tested end to end.** 800+ automated tests on a real PostgreSQL, Playwright on desktop and mobile with WCAG AA checks, and the whole Docker production stack booted and checked in CI, backup restore included.
+- **A QA pass made public.** [18 bugs found, fixed and covered by regression tests](docs/QA_BUG_REPORT.md), with before/after screenshots.
+
+The reasoning behind each of these, and the trade-offs, are in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+
+## Features
+
+**Parents**
+- Assign one-off or recurring (daily, weekly) chores, then approve or reject them with feedback
+- Review spending requests, with per-request and weekly limits per child
+- Set a weekly or monthly allowance, house rules and penalties
+- Follow each child's balance, history and monthly statistics
+- Export all family data and delete accounts (GDPR)
+
+**Children**
+- See their quests, mark them done with a photo and a note
+- Watch their coins grow, with an optional save / spend / give split
+- Save toward personal or shared goals
+- Ask before spending
+
+Installable as a PWA, in light and dark themes, in French.
 
 ## Stack
 
 | Layer | Tech |
 |---|---|
-| Frontend | React 18, Vite, Tailwind CSS, React Router v7 |
-| Backend | Node.js, Express, TypeScript, Prisma ORM |
-| Database | PostgreSQL (dev and production) |
+| Frontend | React 18, Vite, Tailwind CSS, React Router 7, Socket.IO client |
+| Backend | Node.js, Express, TypeScript, Prisma, zod |
+| Database | PostgreSQL 16 |
 | Auth | JWT in an httpOnly cookie |
-| Realtime | Socket.IO |
-| Production | Docker Compose, Caddy (HTTPS), nginx |
+| Tests | Vitest, supertest, Testing Library, Playwright, axe |
+| Production | Docker Compose, Caddy (HTTPS), nginx, daily backups, health monitor |
+| CI | GitHub Actions: lint, typecheck, unit, end-to-end, full stack |
 
-## Project Structure
+## Project structure
 
 ```
 pocket-money/
-├── frontend/   # React SPA
-│   ├── public/         # PWA manifest, icons, service worker
-│   └── src/
-│       ├── screens/    # auth.jsx · parent.jsx · child.jsx · legal.jsx
-│       ├── components/ # layout.jsx · ui.jsx
-│       ├── context.jsx # global state (AppProvider)
-│       └── api.js      # HTTP calls → /api
-├── backend/    # Express API
-│   ├── src/
-│   │   ├── server.ts      # every route
-│   │   ├── validation.ts  # zod schemas
-│   │   ├── authCookie.ts  # session cookie
-│   │   ├── config.ts      # production config checks
-│   │   ├── monitoring.ts  # JSON logs, Sentry, alerts
-│   │   ├── socket.ts      # Socket.IO
-│   │   └── middleware/    # role gates
-│   ├── prisma/         # schema, migrations, seed
-│   └── tests/          # Vitest, real Postgres
-├── e2e/        # Playwright, production build
-└── deploy/     # Caddyfile, backup, restore, monitor scripts
+├── frontend/   # React SPA: screens/, components/, context.jsx (state), api.js
+├── backend/    # Express API: src/server.ts (routes), validation.ts, demo.ts, socket.ts…
+│   ├── prisma/ # schema, migrations, seed
+│   └── tests/  # Vitest on a real Postgres
+├── e2e/        # Playwright on the production build; showcase/ makes the screenshots and GIF
+├── deploy/     # Caddyfile, backup, restore, monitor, full-stack test
+└── docs/       # architecture, design system, screens, QA plan and report
 ```
 
-## Getting Started
+## Getting started
 
-### Prerequisites
-
-- Node.js 18+
-- npm 9+
-
-### 1. Clone
+Requires Node.js 18+ and Docker (for the local Postgres).
 
 ```bash
 git clone https://github.com/skuullking/pocket-money.git
 cd pocket-money
+docker compose -f docker-compose.dev.yml up -d   # local PostgreSQL
 ```
-
-### 2. Backend setup
 
 ```bash
-# From the repo root: start a local Postgres (dev matches production's engine)
-docker compose -f docker-compose.dev.yml up -d
-
 cd backend
-cp .env.example .env       # DATABASE_URL already points at the dev Postgres; set JWT_SECRET
+cp .env.example .env       # set JWT_SECRET; uncomment DEMO_ENABLED for the demo button
 npm install
-npm run db:migrate         # run Postgres migrations
-npm run db:seed            # (optional) seed demo data
+npm run db:migrate
+npm run db:seed            # optional sample family: sarah@dupont.fr / password123
 npm run dev                # http://localhost:3001
 ```
-
-### 3. Frontend setup
 
 ```bash
 cd frontend
@@ -75,55 +98,22 @@ npm install
 npm run dev                # http://localhost:5173
 ```
 
-## Features
+### Tests
 
-**Parent**
-- Create & manage chores with point values and due dates
-- Approve or reject chore submissions with feedback
-- View family analytics and transaction history
-- Set household rules and apply penalties
-- Reset a child's password
-- Export the family's data and delete accounts
-
-**Child**
-- Browse available chores and submit completion photos/notes
-- Track earnings and balance
-- Create savings goals and fund them from balance
-- View personal history and profile
-
-## API Endpoints
-
-The backend exposes a REST API under `/api`:
-
-| Resource | Prefix |
-|---|---|
-| Auth | `/api/auth` |
-| Family | `/api/family` |
-| Chores | `/api/chores` |
-| Goals | `/api/goals` |
-| Transactions | `/api/transactions` |
-| Rules | `/api/rules` |
-| Account (GDPR) | `/api/account` |
-| Health | `/api/health` |
-
-Full request/response examples are in `backend/PocketMoney_Postman_Collection.json`.
-
-## Environment Variables
-
-Copy `backend/.env.example` to `backend/.env`:
-
-```env
-DATABASE_URL="postgresql://pocketmoney:pocketmoney@localhost:5432/pocketmoney"
-JWT_SECRET="change-me-in-production"
-JWT_EXPIRES_IN="7d"
-PORT=3001
-CLIENT_URL="http://localhost:5173"
+```bash
+cd backend && npm test        # starts a disposable Postgres by itself
+cd frontend && npm test
+cd e2e && npx playwright install chromium && npm test
+cd e2e && npm run showcase    # regenerates docs/screenshots (needs Python + Pillow for the GIF)
 ```
 
-> The project uses PostgreSQL in both development and production (`schema.prisma`
-> declares `provider = "postgresql"`). `docker-compose.dev.yml` provides a local
-> dev database; the full production stack is in `docker-compose.yml`. Do not point
-> `DATABASE_URL` at a SQLite `file:` path — the migrations are Postgres-only.
+## Documentation
+
+- [Architecture and technical decisions](docs/ARCHITECTURE.md)
+- [Design system "Pièce d'or"](docs/POCKETMONEY_DESIGN_SYSTEM.md) and [screens and flows](docs/POCKETMONEY_WIREFRAMES_SCREENS.md)
+- [QA test plan](docs/QA_TEST_PLAN.md) and [bug report](docs/QA_BUG_REPORT.md)
+- [Launch checklist](docs/TODO_PUBLICATION.md)
+- API: REST under `/api` (auth, family, chores, goals, expenses, transactions, rules, account, demo, health), with examples in `backend/PocketMoney_Postman_Collection.json`
 
 ## Production
 
@@ -153,6 +143,7 @@ The CI `stack` job runs the whole Compose stack on `DOMAIN=localhost` with `depl
 | `ALERT_WEBHOOK_URL` | no | Slack or Discord webhook for outages, 5xx spikes and failed backups |
 | `ALERT_5XX_THRESHOLD` | no | 5xx errors in 5 minutes that trigger an alert (default 10) |
 | `BACKUP_RETENTION_DAYS` | no | Days of backups kept (default 14) |
+| `DEMO_ENABLED` | no | `true` shows "Try the demo": one disposable family per visitor, deleted after 24 h (default `false`) |
 
 Legal pages and the frontend DSN are compiled into the image: rebuild after changing them.
 

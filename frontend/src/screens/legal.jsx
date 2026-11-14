@@ -62,6 +62,7 @@ export function PrivacyPolicy() {
       </Section>
       <Section title="Durée de conservation">
         <p>Les données sont conservées tant que le compte existe et supprimées lors de sa suppression. Les sauvegardes techniques sont effacées après leur durée de rétention.</p>
+        <p>Une famille de démonstration (bouton « Essayer la démo ») ne contient que des données fictives et est supprimée automatiquement 24 heures après sa création.</p>
       </Section>
       <Section title="Cookies">
         <p>Un seul cookie, strictement nécessaire, maintient la session. Il n'y a pas de cookie de mesure d'audience ou de publicité.</p>
@@ -78,6 +79,9 @@ export function TermsOfUse() {
     <LegalPage title="Conditions d'utilisation">
       <Section title="Objet">
         <p>PocketMoney, édité par {operator}, aide les familles à suivre l'argent de poche, les corvées et l'épargne des enfants.</p>
+      </Section>
+      <Section title="Version bêta et territoire">
+        <p>Le service est en version bêta, gratuit, et peut évoluer ou s'interrompre. Il est destiné aux familles résidant dans l'Union européenne. Il n'est pas proposé aux enfants résidant aux États-Unis.</p>
       </Section>
       <Section title="Pas de service financier">
         <p>Les soldes affichés sont de simples compteurs tenus par la famille. PocketMoney ne détient, ne transfère et n'émet aucune somme d'argent.</p>

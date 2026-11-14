@@ -8,8 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 pocket-money/
 ├── frontend/   # React 18 + Vite SPA
 ├── backend/    # Node.js + Express + Prisma API
-├── e2e/        # Playwright, against the production build
-└── deploy/     # Caddyfile, backup, restore and monitor scripts
+├── e2e/        # Playwright, against the production build (+ showcase/: README screenshots and GIF)
+├── deploy/     # Caddyfile, backup, restore, monitor and stack-test scripts
+└── docs/       # architecture, design system, wireframes, QA plan and report, launch checklist
 ```
 
 ## Commands
@@ -52,6 +53,7 @@ All routes live in one file, `server.ts`, with the cross-cutting concerns factor
 - `middleware/roles.ts` — role gates (parent-only endpoints).
 - `socket.ts` — Socket.IO auth + room helpers (`emitToFamily`/`emitToUser`, rooms `family:<id>` / `user:<id>`).
 - `config.ts` — production config checks, run at startup.
+- `demo.ts` — disposable demo families (`DEMO_ENABLED`): `POST /api/demo` seeds one per visitor, `POST /api/demo/switch` swaps member without a password (demo families only), expired ones are purged lazily on the next demo start.
 - `monitoring.ts` — JSON logger, optional Sentry reporting with scrubbing, webhook alerts. Route handlers report failures through `sendHandlerError`.
 
 Four patterns matter more than any single route and are easy to break:
@@ -95,8 +97,8 @@ Tailwind CSS with a custom theme (`frontend/tailwind.config.js`, colors as CSS v
 
 ### Design References
 
-- `POCKETMONEY_DESIGN_SYSTEM.md` — the "Pièce d'or" tokens, typography, components and accessibility rules, as coded
-- `POCKETMONEY_WIREFRAMES_SCREENS.md` — every route and screen, its actions, and the main flows (chore, expense, goal)
+- `docs/POCKETMONEY_DESIGN_SYSTEM.md` — the "Pièce d'or" tokens, typography, components and accessibility rules, as coded
+- `docs/POCKETMONEY_WIREFRAMES_SCREENS.md` — every route and screen, its actions, and the main flows (chore, expense, goal)
 
 Keep both in sync with the code in the same PR. App icons are exported from `frontend/public/icons/icon.svg`.
 
